@@ -1,0 +1,18 @@
+{
+  "name": "pop-grader",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pop Grader: a ReSkate plugin that shows the trick, the Animator Studio animation, its pack and the pop grade, and the relay that feeds it.",
+  "scripts": {
+    "build": "node tool/build.mjs",
+    "smoke": "node tool/smoke.mjs",
+    "relay": "node relay/pop-grader-relay.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "luau-web": "^1.5.1"
+  }
+}
