@@ -43,4 +43,11 @@ powershell -NoProfile -File tool/render-text.ps1     mod/text: the font sheets
 powershell -NoProfile -File tool/make-icon.ps1       mod/icon.png
 ```
 
-Both read the font files from `../ReSkate-src/External/fonts`.
+Both read the font files from `../ReSkate-src/External/fonts`, and from `tool/fonts` for Anton and Barlow.
+
+## Licence
+
+The code is under the MIT License: see `LICENSE`.
+
+The fonts keep their own licences. Montserrat, Anton and Barlow are under the SIL Open Font License 1.1, Permanent Marker
+is under the Apache License 2.0. The licence texts are in `mod/text/licences`.

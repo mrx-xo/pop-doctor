@@ -2,6 +2,7 @@
   "name": "pop-grader",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Pop Grader: a ReSkate plugin that shows the trick, the Animator Studio animation, its pack and the pop grade, and the relay that feeds it.",
   "scripts": {
