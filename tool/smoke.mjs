@@ -144,7 +144,13 @@ function D:measure(text) return vector.create(#tostring(text) * 9, 20, 0) end
 function D:text(pos, text) assert(type(text) == "string", "d:text wants a string"); DRAWN.texts[#DRAWN.texts + 1] = text end
 function D:rect() DRAWN.rects += 1 end
 function D:circle() DRAWN.rects += 1 end
-function D:image(file) assert(type(file) == "string", "d:image wants a file"); DRAWN.images += 1; IMAGES[file] = true end
+function D:image(file, a, b)
+    assert(type(file) == "string", "d:image wants a file"); DRAWN.images += 1; IMAGES[file] = true
+    if a and b then
+        DRAWN.min_x = math.min(DRAWN.min_x or a.x, a.x, b.x)
+        DRAWN.max_x = math.max(DRAWN.max_x or a.x, a.x, b.x)
+    end
+end
 
 -- The page's widgets, with the limits the notes record: 160 widgets a page, an info label 60 and value 200
 -- characters, a section's title 60 and subtitle 120.
@@ -296,6 +302,29 @@ for layout = 1, 3 do
     end
 end
 report[#report + 1] = runs .. " setting combinations x 11 pops: no draw error, every tab within its limits"
+
+-- 3b. the picture font stays on the screen in every corner (a right corner once ran off the right edge)
+for corner = 1, 4 do
+    for layout = 1, 3 do
+        for grade_style = 1, 6 do
+            reset()
+            files["settings.json"] = encode({on = true, layout = layout, grade_style = grade_style, title_face = 4,
+                corner = corner, pack_style = 4, scale = 1, fade_s = 0})
+            PLUGIN()
+            pop("kickflip", studio_line("kickflip", "Kickflip low 4", "SESSIONING PACK", "low"))
+            draw()
+            assert(DRAWN.images > 0, "corner " .. corner .. ": no glyph pictures drawn")
+            local where = "corner " .. corner .. ", layout " .. layout .. ", grade style " .. grade_style
+            -- A glyph's picture is its whole cell, with clear padding round the ink, so a cell may pass the edge by a
+            -- few pixels while the ink does not. The bug put the far end 195 px out.
+            assert(DRAWN.min_x >= -24 and DRAWN.max_x <= 2560 + 24, where .. ": glyphs from x " .. DRAWN.min_x .. " to " .. DRAWN.max_x .. " on a 2560 screen")
+            -- and on its own side of the screen
+            local mid = (DRAWN.min_x + DRAWN.max_x) / 2
+            assert((corner % 2 == 0) == (mid > 1280), where .. ": drawn around x " .. mid)
+        end
+    end
+end
+report[#report + 1] = "picture font: on screen and on its own side in all 4 corners x 3 layouts x 6 grade styles"
 local pictures = 0
 for _ in pairs(IMAGES) do pictures += 1 end
 assert(pictures <= 32, "the plugin drew " .. pictures .. " different pictures; its life allows 32")

@@ -24,8 +24,11 @@ The relay needs Node.js 18 or newer: https://nodejs.org (the LTS installer, all 
 Why a relay: a plugin can only read its own data folder. What the Studio played is written in the game's log,
 and the pack names are in your ReSkate.Tricks folder. The relay reads those and hands them to the plugin.
 It reads ReSkate.log, ReSkate.Tricks and the trainer's settings file. It writes studio.json in this
-plugin's data folder and remembers the game folder in %LOCALAPPDATA%\ReSkate\pop-doctor-relay.json.
-It does not go online.
+plugin's data folder and remembers the game folder in %LOCALAPPDATA%\ReSkate\pop-doctor-relay.json
+(on Linux and Mac: ~/.config/pop-doctor/relay.json). It does not go online.
+
+Windows, Linux and Mac: the relay runs on all three. On Linux and Mac it has only been tested with
+stand-in game folders so far, so shout if it acts up next to the real game.
 
 ## Install
 
@@ -33,10 +36,12 @@ It does not go online.
 2. Install Node.js if you do not have it.
 3. Download the relay zip and unzip it anywhere, for example on your desktop.
 4. Double-click "Start Pop Doctor Relay". A small window opens and stays open.
+   On Linux or Mac: open a terminal in that folder and run `sh start-pop-doctor-relay.sh`.
 5. Play. Pop a trick: the block appears bottom-left.
 
 Start the relay each time you play. It can be started before or after the game.
-If the window says the ReSkate folder was not found, start the game first, and it goes on by itself.
+The relay finds the game by itself and says which folder it took. Two installs? It follows the one you are playing.
+If it finds nothing it asks: paste the folder that holds Skate.exe, or just start the game and it carries on.
 
 ## Without the relay
 

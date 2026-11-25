@@ -122,8 +122,12 @@ const relayFiles = fs.readdirSync(RELAY_SRC);
 if (!relayFiles.some((f) => f.endsWith(".mjs")) || !relayFiles.some((f) => f.endsWith(".cmd"))) fail("relay/ needs the .mjs and the .cmd that starts it");
 for (const f of relayFiles) {
   if (/\.(cmd|txt)$/i.test(f)) fs.writeFileSync(path.join(RELAY, f), read(path.join(RELAY_SRC, f)).replace(/\n/g, "\r\n"));
+  else if (/\.sh$/i.test(f)) fs.writeFileSync(path.join(RELAY, f), read(path.join(RELAY_SRC, f))); // a shell wants plain line ends
   else fs.copyFileSync(path.join(RELAY_SRC, f), path.join(RELAY, f));
 }
+const sh = relayFiles.find((f) => f.endsWith(".sh"));
+if (!sh || !read(path.join(RELAY_SRC, sh)).includes(relayFiles.find((f) => f.endsWith(".mjs")))) fail("relay/ needs a .sh that starts the relay, for Linux and macOS");
+if (fs.readFileSync(path.join(RELAY, sh), "utf8").includes("\r")) fail(`${sh} went out with Windows line ends`);
 const started = read(path.join(RELAY_SRC, relayFiles.find((f) => f.endsWith(".cmd"))));
 const relayName = relayFiles.find((f) => f.endsWith(".mjs"));
 if (!started.includes(relayName)) fail(`the relay's .cmd does not start ${relayName}`);

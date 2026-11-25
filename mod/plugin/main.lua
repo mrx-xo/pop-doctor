@@ -620,6 +620,9 @@ local function draw_overlay(d)
     local imgs = font_choice and TEXT_IMAGES[font_choice.folder] or nil
     local as_image = TITLE_FACES[settings.title_face] == "image" and imgs ~= nil and type(imgs.glyphs) == "table"
     if as_image then TPX = TITLE_PX[settings.title_face] * u * settings.scale end -- a picture: scales with the window
+    -- Declared before glyph_text, which reads right: declared after it, the name was a global there and always nil.
+    local corner = CORNERS[settings.corner]
+    local right = corner:find("right") ~= nil
     -- Text from the bitmap font (tool/render-text.ps1): each glyph is a cell of a 512 px sheet, drawn through
     -- d:image's uv window and tinted; the pen moves by the glyph's advance. px is the em in window pixels; the
     -- near edge is at x, the em box's top at y. Returns the width. A character the sheet lacks takes a space.
@@ -653,8 +656,6 @@ local function draw_overlay(d)
     -- No label when the Studio has no grade; the dot style has no text either.
     local word = nil
     if labels and grade then word = labels[grade] or grade end
-    local corner = CORNERS[settings.corner]
-    local right = corner:find("right") ~= nil
     local bottom = corner:find("bottom") ~= nil
     local margin = settings.margin * u
     local sign = right and -1 or 1
