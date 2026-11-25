@@ -127,6 +127,38 @@ grep -q "game: $A  (the folder you gave)" "$T/out8"; ok $? "takes the pasted pat
 grep -q "\"$A\"" "$HOME/.config/pop-doctor/relay.json"; ok $? "remembers it"
 else echo "SKIP  no python3 for a terminal"; fi
 
+echo "--- 9. WINEPREFIX names the prefix: its trainer file wins over a newer one elsewhere"
+P2="$T/prefix two"; D2="$P2/drive_c/users/steamuser/AppData/Local/ReSkate/trainer"
+mkdir -p "$D2"; echo '{"active":[],"options":{"gravity":2.5}}' > "$D2/trainer.json"; touch -t 202001010000 "$D2/trainer.json"
+WINEPREFIX="$P2" node "$RELAY" < /dev/null > "$T/out9" 2>&1 &
+R=$!
+sleep 4
+studio "$A" | grep -q '"gravity":2.5'; ok $? "trainer options come from WINEPREFIX, not the newest file"
+kill $R; wait $R 2>/dev/null
+
+if [ "$(uname -s)" = Linux ]; then
+echo "--- 10. Linux: the running game's own prefix, and another game brings another trainer file"
+PA="$T/prefix A"; PB="$T/compat B/pfx"
+for pair in "$PA=3.5" "$PB=4.5"; do
+  d="${pair%=*}/drive_c/users/steamuser/AppData/Local/ReSkate/trainer"; mkdir -p "$d"
+  echo "{\"active\":[],\"options\":{\"gravity\":${pair#*=}}}" > "$d/trainer.json"; touch -t 202001010000 "$d/trainer.json"
+done
+node "$RELAY" < /dev/null > "$T/out10" 2>&1 &
+R=$!
+sleep 4
+studio "$A" | grep -q '"gravity":1.5'; ok $? "no game running: the newest trainer file is the guess"
+WINEPREFIX="$PA" bash -c "exec -a '$A/Skate.exe' sleep 600" &
+G1=$!
+sleep 9
+studio "$A" | grep -q '"gravity":3.5'; ok $? "the game runs: its own prefix is used instead"
+kill $G1; wait $G1 2>/dev/null
+STEAM_COMPAT_DATA_PATH="$T/compat B" bash -c "exec -a '$B/Skate.exe' sleep 600" &
+G2=$!
+sleep 9
+studio "$B" | grep -q '"gravity":4.5'; ok $? "another game from a Steam prefix: its trainer file, not the last game's"
+kill $R $G2; wait $R $G2 2>/dev/null
+fi
+
 echo
 echo "$pass passed, $fail failed   ($(uname -s), node $(node -v))"
 [ "$fail" = 0 ] || { echo "--- relay output"; cat "$T"/out*; }

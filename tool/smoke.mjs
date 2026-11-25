@@ -330,6 +330,21 @@ for _ in pairs(IMAGES) do pictures += 1 end
 assert(pictures <= 32, "the plugin drew " .. pictures .. " different pictures; its life allows 32")
 report[#report + 1] = tabs .. " tabs, at most " .. most .. " widgets (160 allowed), " .. pictures .. " different pictures (32 allowed)"
 
+-- 3c. a scored kickflip, then at once a heelflip the game gives no score event: the overlay moves on to the heelflip
+reset()
+files["settings.json"] = encode({on = true, layout = 1, grade_style = 4, title_face = 1, pack_style = 4, fade_s = 0})
+PLUGIN()
+pop("kickflip")
+fire("trick_landed", {name = "Kickflip", ms = 520, points = 100, multiplier = 1})
+clock += 100; run_timers()
+draw()
+assert(drew("Kickflip"), "the scored kickflip is not drawn: " .. table.concat(DRAWN.texts, " | "))
+pop("heelflip")
+clock += 1000; run_timers()
+draw()
+assert(drew("Heelflip") and not drew("Kickflip"), "after a quick heelflip with no score the overlay draws: " .. table.concat(DRAWN.texts, " | "))
+report[#report + 1] = "a quick pop with no score event after a scored one: the overlay shows the new trick"
+
 -- 4. which pop a choice of the Studio is about (the relay numbers each choice: sel), "Stock" as a finding, and the
 -- pop grade from the launch's up-speed. Text faces, so the lines are d:text and can be read back.
 reset()

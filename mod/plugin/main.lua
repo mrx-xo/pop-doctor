@@ -863,8 +863,12 @@ reskate.time.every(100, function()
     if s and s ~= hud.serial then
         if hud.serial ~= nil and s > 0 then
             note_jump(t.last)
-            -- a trick_landed event in the last 1.5 s already named this jump; a fallback entry from the previous jump does not
+            -- a trick_landed event in the last 1.5 s already named this jump; a fallback entry from the previous jump does
+            -- not, and neither does an event from before this jump's own launch: a scored kickflip and then a quick
+            -- heelflip with no score left "Kickflip" on screen for good
             local scored = hud.trick and not hud.trick.game and now() - hud.trick.at < 1500
+            local l = hud.launch
+            if scored and l and math.abs(now() - l.at - (t.last.air_time or 0) * 1000) < 1000 and hud.trick.at < l.at then scored = false end
             if not scored then
                 hud.trick = {name = hud.air_trick or "(no trick)", ms = t.last.air_time * 1000, at = now(), game = true}
             end

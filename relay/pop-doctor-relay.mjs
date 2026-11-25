@@ -87,6 +87,7 @@ function gameFromArgs(args) {
 // The folder of the game that is running now, or undefined. Asked every few seconds, so it is cheap: on Windows
 // tasklist says whether a Skate.exe runs, and PowerShell is asked for its path once per game process.
 let seenPid = null, seenDir;
+let gamePrefix = null; // {dir, prefix}: the Wine prefix a running game said it uses (Linux: the process's environment)
 async function runningGame() {
   if (WIN) {
     const m = /^"Skate\.exe","(\d+)"/im.exec(await run("tasklist", ["/FI", "IMAGENAME eq Skate.exe", "/FO", "CSV", "/NH"]));
@@ -108,7 +109,14 @@ async function runningGame() {
       try { line = readFileSync(`/proc/${pid}/cmdline`, "utf8").replace(/\0/g, " "); } catch { continue; }
       if (!line.includes("Skate.exe")) continue;
       const dir = gameFromArgs(line.trim());
-      if (dir) return dir;
+      if (!dir) continue;
+      try {
+        const env = readFileSync(`/proc/${pid}/environ`, "utf8").split("\0");
+        const get = (k) => env.find((e) => e.startsWith(k + "="))?.slice(k.length + 1);
+        const prefix = get("WINEPREFIX") ?? (get("STEAM_COMPAT_DATA_PATH") ? path.join(get("STEAM_COMPAT_DATA_PATH"), "pfx") : undefined);
+        if (prefix) gamePrefix = { dir, prefix };
+      } catch { /* another user's process */ }
+      return dir;
     }
     return undefined;
   }
@@ -129,9 +137,10 @@ function above() {
   return out;
 }
 
-// ReSkate's own data folder, for the trainer's options. Off Windows it is inside a Wine prefix: every Steam library's
-// compatdata, the CrossOver bottles and the default prefix are looked through, and the one whose trainer.json was
-// written last wins.
+// ReSkate's own data folder, for the trainer's options. Off Windows it is inside a Wine prefix. A prefix that is
+// known is the only one looked in: WINEPREFIX when the relay was started with it, else the one the running game's
+// process names. Only with neither are every Steam library's compatdata, the CrossOver bottles and the default
+// prefix looked through, and the one whose trainer.json was written last wins: a guess, right with one game.
 function winePrefixes() {
   const out = [];
   if (process.env.WINEPREFIX) out.push(process.env.WINEPREFIX);
@@ -152,8 +161,9 @@ function winePrefixes() {
 function dataDir() {
   if (process.env.RESKATE_DATA) return process.env.RESKATE_DATA;
   if (WIN) return path.join(process.env.LOCALAPPDATA ?? HOME, "ReSkate");
+  const known = process.env.WINEPREFIX || (gamePrefix && GAME && samePath(gamePrefix.dir, GAME) ? gamePrefix.prefix : null);
   let best, bestAt = -1;
-  for (const p of winePrefixes()) for (const u of subdirs(path.join(p, "drive_c", "users"))) {
+  for (const p of known ? [known] : winePrefixes()) for (const u of subdirs(path.join(p, "drive_c", "users"))) {
     const d = path.join(u, "AppData", "Local", "ReSkate");
     let at = -1;
     try { at = statSync(path.join(d, "trainer", "trainer.json")).mtimeMs; }
@@ -573,6 +583,8 @@ function useGame(dir) {
   trickOfClip.clear(); lastDoes.clear(); lastStance.clear(); lastGrind.clear();
   episode = null;
   offset = 0; carry = ""; logFile = null;
+  // another game may keep its trainer in another prefix: look again, and say nothing of the last one's meanwhile
+  if (!WIN) { TRAINER = null; trainerLooked = 0; trainerText = null; state.trainer = null; }
 }
 function remember() {
   try { mkdirSync(path.dirname(REMEMBER), { recursive: true }); writeFileSync(REMEMBER, JSON.stringify({ game: GAME })); } catch { /* found again next time */ }
@@ -592,6 +604,7 @@ async function serve(dir, why) {
   seedLog();
   await findTargets();
   await readPacks();
+  await readTrainer();
   await write();
 }
 
@@ -629,15 +642,19 @@ setInterval(() => { readNew(); write(); }, POLL_MS);
 setInterval(() => { readTrainer().catch(() => {}); }, TRAINER_MS);
 setInterval(() => { readPacks().catch(() => {}); }, PACKS_MS);
 setInterval(() => { findTargets().catch(() => {}); }, TARGETS_MS);
-// The game may run from another folder than the one taken at the start (two installs, or the relay started first).
-if (!TOLD) {
+// The game may run from another folder than the one taken at the start (two installs, or the relay started first):
+// unless the folder was told, the relay moves over. A running game also says which Wine prefix it uses, which may
+// not be the one the trainer's file was guessed in.
+{
   let looking = false;
   setInterval(async () => {
     if (looking) return;
     looking = true;
     try {
+      const before = gamePrefix?.prefix;
       const dir = await runningGame();
-      if (dir && isGame(dir) && !samePath(dir, GAME)) await serve(dir, "the game that is running now; it was on another folder");
+      if (!TOLD && dir && isGame(dir) && !samePath(dir, GAME)) await serve(dir, "the game that is running now; it was on another folder");
+      else if (gamePrefix?.prefix !== before) { TRAINER = null; trainerLooked = 0; }
     } catch (e) { console.error("relay:", e.message); }
     finally { looking = false; }
   }, FOLLOW_MS);
