@@ -1,14 +1,14 @@
 {
-  "name": "pop-grader",
+  "name": "pop-doctor",
   "version": "1.0.0",
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Pop Grader: a ReSkate plugin that shows the trick, the Animator Studio animation, its pack and the pop grade, and the relay that feeds it.",
+  "description": "Pop Doctor: a ReSkate plugin of pop tools as modules. Its first module, Pop Grader, shows the trick, the Animator Studio animation, its pack and the pop grade, and the relay that feeds it.",
   "scripts": {
     "build": "node tool/build.mjs",
     "smoke": "node tool/smoke.mjs",
-    "relay": "node relay/pop-grader-relay.mjs"
+    "relay": "node relay/pop-doctor-relay.mjs"
   },
   "engines": {
     "node": ">=18"

@@ -5,7 +5,7 @@
 // the manifest asks no permission for, a page over its widget or text limits, a draw error.
 //
 //   node tool/smoke.mjs                      mod/, the plugin as it is worked on
-//   node tool/smoke.mjs dist/Pop_Grader      the built package (build.mjs runs this)
+//   node tool/smoke.mjs dist/Pop_Doctor      the built package (build.mjs runs this)
 //
 // It is a stand-in, not the game: it says nothing about how the overlay looks or how a landing went.
 
@@ -234,10 +234,10 @@ local function all_pages()
     end
     return most, tabs
 end
--- The HISTORY tab (tab 2) with every jump open, newest first: each jump's title, and its rows of one label.
+-- The HISTORY tab (tab 3) with every jump open, newest first: each jump's title, and its rows of one label.
 local function history(label)
     OPEN_ALL = true
-    local ui = make_ui(2)
+    local ui = make_ui(3)
     pages[1].build(ui)
     OPEN_ALL = false
     assert(ui.n <= 160, "the HISTORY tab with every jump open has " .. ui.n .. " widgets; a page holds 160")

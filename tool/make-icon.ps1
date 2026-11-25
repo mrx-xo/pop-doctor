@@ -41,7 +41,7 @@ function Centred([string]$text, [float]$em, [float]$cx, [float]$top, $brush) {
 $white = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::White)
 $dark = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 18, 20, 24))
 Centred 'POP' 78 128 14 $white
-Centred 'GRADER' 52 128 98 $white
+Centred 'DOCTOR' 52 128 98 $white
 
 # the three grades, as the overlay's badges: low, mid, high in the default colours
 $grades = @(

@@ -130,20 +130,22 @@ dropLines(/^\s+push_event\(.*\)$/, 2, "push_event lines");
 // ---- the ops, the pad script and the command loop out; the relay's file is still read -----------------------------
 cut("-- ---- ops ----", "-- studio.json is the tool's relay of", "-- ---- the relay's file -------------------------------------------------------------------------\n");
 swap("-- studio.json is the tool's relay of the Studio's log lines (tool/src/relay.mjs): what played, the pop grade, when",
-  "-- studio.json is the relay's account of the Studio's log lines (relay/pop-grader-relay.mjs): what played, the pop grade, when");
+  "-- studio.json is the relay's account of the Studio's log lines (relay/pop-doctor-relay.mjs): what played, the pop grade, when");
 cut("local function poll()", "-- ---- the overlay ------", "reskate.time.every(POLL_MS, read_studio)\n\n");
 
-// ---- the F2 page: three tabs, SETTINGS / HISTORY / MISC (the LIVE tab went on 2026-11-24: the newest jump of HISTORY says the same; MISC came on 2026-11-25) ------------------------------------------------------------------------------------
+// ---- the F2 page: four tabs, MODULES / SETTINGS / HISTORY / MISC (the LIVE tab went on 2026-11-24: the newest jump of HISTORY says the same; MISC and MODULES came on 2026-11-25) ------------------------------------------------------------------------------------
 swap("HISTORY (last 10 jumps), BRIDGE (tool state).", "HISTORY (last 10 jumps).");
-swap(`local TABS = {"SETTINGS", "POP BUTLER", "HISTORY", "MISC", "BRIDGE"}`, `local TABS = {"SETTINGS", "HISTORY", "MISC"}`);
+swap(`local TABS = {"MODULES", "SETTINGS", "POP BUTLER", "HISTORY", "MISC", "BRIDGE"}`, `local TABS = {"MODULES", "SETTINGS", "HISTORY", "MISC"}`);
 cut("local function bridge_tab(ui)", `reskate.menu.page("StudioBridge"`, "");
-swap(`    if tab == 1 then settings_tab(ui)
-    elseif tab == 2 then air_tab(ui)
-    elseif tab == 3 then history_tab(ui)
-    elseif tab == 4 then misc_tab(ui)
+swap(`    if tab == 1 then modules_tab(ui)
+    elseif tab == 2 then settings_tab(ui)
+    elseif tab == 3 then air_tab(ui)
+    elseif tab == 4 then history_tab(ui)
+    elseif tab == 5 then misc_tab(ui)
     else bridge_tab(ui) end`,
-  `    if tab == 1 then settings_tab(ui)
-    elseif tab == 2 then history_tab(ui)
+  `    if tab == 1 then modules_tab(ui)
+    elseif tab == 2 then settings_tab(ui)
+    elseif tab == 3 then history_tab(ui)
     else misc_tab(ui) end`);
 cut("-- ---- console: bridge <op>", null, `log("loaded")\n`);
 
@@ -237,10 +239,10 @@ local report = {}
 `,
   `    return most, tabs
 end
--- The HISTORY tab (tab 2) with every jump open, newest first: each jump's title, and its rows of one label.
+-- The HISTORY tab (tab 3) with every jump open, newest first: each jump's title, and its rows of one label.
 local function history(label)
     OPEN_ALL = true
-    local ui = make_ui(2)
+    local ui = make_ui(3)
     pages[1].build(ui)
     OPEN_ALL = false
     assert(ui.n <= 160, "the HISTORY tab with every jump open has " .. ui.n .. " widgets; a page holds 160")

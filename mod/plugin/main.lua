@@ -1,6 +1,6 @@
--- Pop Grader: a small block in a corner of the screen with the trick you just did, the Animator Studio animation
--- that played, its pack and the pop grade; an F2 page (PLUGINS > Pop Grader) holds the settings and the last jumps.
--- What the Studio played comes from the Pop Grader relay, a small Node.js program beside the game: it writes
+-- Pop Doctor: a small block in a corner of the screen with the trick you just did, the Animator Studio animation
+-- that played, its pack and the pop grade; an F2 page (PLUGINS > Pop Doctor) holds the settings and the last jumps.
+-- What the Studio played comes from the Pop Doctor relay, a small Node.js program beside the game: it writes
 -- studio.json into this plugin's data folder (Mods\.reskate_plugin_data\<id>\), the only place a plugin reads.
 
 local POLL_MS = 200
@@ -400,7 +400,7 @@ end)
 reskate.on("bail", function() hud.bail = {at = now()} end)
 
 -- ---- the relay's file -------------------------------------------------------------------------
--- studio.json is the relay's account of the Studio's log lines (relay/pop-grader-relay.mjs): what played, the pop grade, when
+-- studio.json is the relay's account of the Studio's log lines (relay/pop-doctor-relay.mjs): what played, the pop grade, when
 -- it let go, and the trainer's options. Re-decoded only when the text changes; seen_at dates it on the game's clock.
 local function read_studio()
     local text = reskate.files.read("studio.json")
@@ -882,7 +882,7 @@ reskate.on("tick", function()
     pcall(flip_sample, l)
 end)
 
--- ---- the F2 page: PLUGINS > Pop Grader ------------------------------------------------------
+-- ---- the F2 page: PLUGINS > Pop Doctor ------------------------------------------------------
 -- Tabs: SETTINGS (the overlay's options), HISTORY (last 10 jumps).
 -- There was a LIVE tab (the last jump) until 2026-11-24: the newest jump of HISTORY says the same, so it went (user).
 -- Every label is cut to the widget's limit: a label over 60 characters raises an error, and 5 errors in 10 s stop
@@ -913,12 +913,21 @@ local function tuned()
 end
 
 local tab = 1
-local TABS = {"SETTINGS", "HISTORY", "MISC"}
+local TABS = {"MODULES", "SETTINGS", "HISTORY", "MISC"}
+
+-- MODULES: the plugin's parts, each with a switch of its own (2026-11-25). Pop Grader, the block in the corner, is
+-- the first: hud.on is its switch, saved as "on" (it was "Show the overlay" on SETTINGS).
+local function modules_tab(ui)
+    ui:card("MODULES", "Switch each part on or off")
+    local was = hud.on
+    hud.on = ui:toggle("on", "Pop Grader", hud.on)
+    ui:note("Pop Grader: the block in the corner with the trick you just did, the animation that played, its pack and the pop grade. Its options are on SETTINGS, your last jumps on HISTORY.")
+    if hud.on ~= was then save_settings() end
+end
 
 local function settings_tab(ui)
     local before = reskate.json.encode(settings) .. tostring(hud.on)
     ui:card("OVERLAY", "The block in the corner")
-    hud.on = ui:toggle("on", "Show the overlay", hud.on)
     settings.corner = ui:buttons("corner", CORNERS, settings.corner) or settings.corner
     ui:label("Layout")
     settings.layout = ui:buttons("layout", LAYOUTS, settings.layout) or settings.layout
@@ -1004,7 +1013,7 @@ local HISTORY_OPEN = 25 -- the air bar, 4 headings, 20 rows
 local function history_tab(ui)
     local s = hud.studio
     if not s then
-        ui:warn("The relay is not running. Start the Pop Grader relay and leave it open: see the README.")
+        ui:warn("The relay is not running. Start the Pop Doctor relay and leave it open: see the README.")
     elseif s.missing then
         ui:warn(cut(s.missing, 300))
     end
@@ -1078,10 +1087,11 @@ local function misc_tab(ui)
     ui:note("The Studio grades its own animations. A stock pop is graded by how fast you leave the ground. The cutoffs start at the game's and settle on your own pops as you skate.")
 end
 
-reskate.menu.page("Pop Grader", function(ui)
+reskate.menu.page("Pop Doctor", function(ui)
     tab = ui:tabs("tabs", TABS, tab)
-    if tab == 1 then settings_tab(ui)
-    elseif tab == 2 then history_tab(ui)
+    if tab == 1 then modules_tab(ui)
+    elseif tab == 2 then settings_tab(ui)
+    elseif tab == 3 then history_tab(ui)
     else misc_tab(ui) end
 end)
 

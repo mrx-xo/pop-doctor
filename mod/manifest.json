@@ -1,7 +1,7 @@
 {
-    "name": "Pop_Grader",
+    "name": "Pop_Doctor",
     "version_number": "1.0.0",
-    "website_url": "https://github.com/mrx-xo/pop-grader",
-    "description": "Shows the trick you just did, the Animator Studio animation that played, its pack and the pop grade in a corner of the screen. Needs the Pop Grader relay (Node.js) running beside the game.",
+    "website_url": "https://github.com/mrx-xo/pop-doctor",
+    "description": "Pop tools as modules. First module, Pop Grader: the trick you just did, the Animator Studio animation that played, its pack and the pop grade in a corner of the screen. Needs the Pop Doctor relay (Node.js) running beside the game.",
     "dependencies": []
 }

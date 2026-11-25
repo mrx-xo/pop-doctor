@@ -1,6 +1,6 @@
-# Pop Grader
+# Pop Doctor
 
-A ReSkate plugin: a small block in a corner of the screen with the trick you just did, the Animator Studio
+A ReSkate plugin of pop tools, as modules a player switches on and off. Its first module is Pop Grader: a small block in a corner of the screen with the trick you just did, the Animator Studio
 animation that played, its pack and the pop grade. What a player reads about it is `mod/README.md`, the store page.
 
 ## What is where
@@ -18,7 +18,7 @@ animation that played, its pack and the pop grade. What a player reads about it 
 npm install                  once: the Luau VM the smoke test runs in
 node tool/smoke.mjs          load mod/ against a stand-in for the game and walk it through a session
 node tool/build.mjs          check mod/ against the store's and the game's rules, write the two zips, smoke test them
-node relay/pop-grader-relay.mjs      the relay, straight from here
+node relay/pop-doctor-relay.mjs      the relay, straight from here
 ```
 
 The name, version, description and website are `mod/manifest.json`. The permissions are `mod/reskate-plugin.json`:

@@ -1,4 +1,8 @@
-# Pop Grader
+# Pop Doctor
+
+Pop tools for ReSkate, as modules you switch on and off. Version 1 has one module: Pop Grader.
+
+## Pop Grader
 
 A small block in a corner of the screen that tells you, after every pop:
 
@@ -11,24 +15,24 @@ An F2 page holds every setting and the details of your last 10 jumps.
 ## You need two things
 
 1. This plugin.
-2. The Pop Grader relay, a small program that runs beside the game.
+2. The Pop Doctor relay, a small program that runs beside the game.
 
-Download the relay: https://github.com/mrx-xo/pop-grader/releases/latest (the file named Pop_Grader_Relay, under Assets).
+Download the relay: https://github.com/mrx-xo/pop-doctor/releases/latest (the file named Pop_Doctor_Relay, under Assets).
 
 The relay needs Node.js 18 or newer: https://nodejs.org (the LTS installer, all defaults).
 
 Why a relay: a plugin can only read its own data folder. What the Studio played is written in the game's log,
 and the pack names are in your ReSkate.Tricks folder. The relay reads those and hands them to the plugin.
 It reads ReSkate.log, ReSkate.Tricks and the trainer's settings file. It writes studio.json in this
-plugin's data folder and remembers the game folder in %LOCALAPPDATA%\ReSkate\pop-grader-relay.json.
+plugin's data folder and remembers the game folder in %LOCALAPPDATA%\ReSkate\pop-doctor-relay.json.
 It does not go online.
 
 ## Install
 
-1. Install Pop Grader from the launcher (GET MODS) and turn its plugin on when the game asks.
+1. Install Pop Doctor from the launcher (GET MODS) and turn its plugin on when the game asks.
 2. Install Node.js if you do not have it.
 3. Download the relay zip and unzip it anywhere, for example on your desktop.
-4. Double-click "Start Pop Grader Relay". A small window opens and stays open.
+4. Double-click "Start Pop Doctor Relay". A small window opens and stays open.
 5. Play. Pop a trick: the block appears bottom-left.
 
 Start the relay each time you play. It can be started before or after the game.
@@ -45,9 +49,10 @@ from the upward speed at takeoff.
 
 ## Settings
 
-F2 > PLUGINS > Pop Grader
+F2 > PLUGINS > Pop Doctor
 
-- SETTINGS: on or off, the corner, the layout (three lines, two lines, one line), the font, the size, the distance
+- MODULES: each module's switch. Pop Grader is on to start with.
+- SETTINGS: the corner, the layout (three lines, two lines, one line), the font, the size, the distance
   from the edge, hiding the block some seconds after a landing, which lines show, how the pop grade is written
   (dot, letter, short, word, pop, badge), the pack badge and its colours, the backing box, the grade colours.
 - HISTORY: the last 10 jumps. Open one for its animation, flight and landing numbers.
@@ -82,5 +87,5 @@ Settings are kept in the plugin's data folder: Mods\.reskate_plugin_data\<this p
 - "Stock" on animations you know the Studio is playing: check that the relay window is still open,
   then pop again. Old relay data can remain after its window closes.
 - The relay says the plugin is not in Mods: install the plugin; the relay looks again every 30 seconds.
-- Nothing on screen: F2 > PLUGINS > Pop Grader > SETTINGS > Show the overlay.
+- Nothing on screen: F2 > PLUGINS > Pop Doctor > MODULES > Pop Grader.
 - The game's log (logs\ReSkate.log) names the plugin on every line it writes.

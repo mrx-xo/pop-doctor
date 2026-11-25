@@ -1,5 +1,5 @@
 @echo off
-title Pop Grader relay
+title Pop Doctor relay
 where node >nul 2>nul
 if errorlevel 1 (
     echo Node.js is not installed, or not on the PATH.
@@ -8,7 +8,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-node "%~dp0pop-grader-relay.mjs" %*
+node "%~dp0pop-doctor-relay.mjs" %*
 echo.
 echo The relay stopped.
 pause

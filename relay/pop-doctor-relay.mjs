@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// pop-grader-relay.mjs: tail ReSkate.log for Animation Studio lines and the trainer's options, and write them into the plugin's
+// pop-doctor-relay.mjs: tail ReSkate.log for Animation Studio lines and the trainer's options, and write them into the plugin's
 // data folder as studio.json, which the plugin's overlay shows (the plugin cannot read outside its data folder).
 //
-//   node pop-grader-relay.mjs                       keep running; ctrl-c stops it
-//   node pop-grader-relay.mjs --game "D:\ReSkate"   the game's folder, when it is not found by itself
-//   node pop-grader-relay.mjs --id <mod folder>     write for this one plugin folder only
-//   RESKATE_GAME=... POP_GRADER_ID=...              the same two, from the environment
+//   node pop-doctor-relay.mjs                       keep running; ctrl-c stops it
+//   node pop-doctor-relay.mjs --game "D:\ReSkate"   the game's folder, when it is not found by itself
+//   node pop-doctor-relay.mjs --id <mod folder>     write for this one plugin folder only
+//   RESKATE_GAME=... POP_DOCTOR_ID=...              the same two, from the environment
 //
 // The game's folder: --game / RESKATE_GAME, else the running Skate.exe, the folder remembered from last time, the
 // folders above this file, then C:\Games\ReSkate. With none, it waits for the game to start.
 // The plugin: every folder in Mods whose manifest.json is named one of PLUGIN_NAMES (the store installs the release
-// as <Owner>-Pop_Grader; a hand copy can have any folder name), so a store install and a hand copy are both fed.
+// as <Owner>-Pop_Doctor; a hand copy can have any folder name), so a store install and a hand copy are both fed.
 // Needs nothing but Node 18 or newer: no packages.
 //
 // studio.json: {played, trick, grade, graded_by, native, inferred, sel, pack, stance, lets_go, missing, line_at,
@@ -21,23 +21,23 @@
 //   native     true when the Studio said it plays nothing of yours for this pop (the game's own animation).
 //   inferred   true when the choice's own line was swallowed by the log and it was told from the clip's other lines.
 //
-//   node pop-grader-relay.mjs --replay <ReSkate.log>   read a whole log and print each choice it tells; writes nothing
+//   node pop-doctor-relay.mjs --replay <ReSkate.log>   read a whole log and print each choice it tells; writes nothing
 
 import { promises as fs, statSync, existsSync, openSync, readSync, closeSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const PLUGIN_NAMES = ["Pop_Grader"];
+const PLUGIN_NAMES = ["Pop_Doctor"];
 const argv = process.argv.slice(2);
 function arg(name) { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; }
 if (argv.includes("--help") || argv.includes("-h")) {
-  console.log('Pop Grader relay: tells the Pop Grader overlay what Animator Studio played.\n\n  node ' + path.basename(fileURLToPath(import.meta.url)) + ' [--game "<ReSkate folder>"] [--id <mod folder>]\n\nLeave it running while you play. Ctrl-C stops it.');
+  console.log('Pop Doctor relay: tells the Pop Doctor overlay what Animator Studio played.\n\n  node ' + path.basename(fileURLToPath(import.meta.url)) + ' [--game "<ReSkate folder>"] [--id <mod folder>]\n\nLeave it running while you play. Ctrl-C stops it.');
   process.exit(0);
 }
 
 const LOCAL = path.join(process.env.LOCALAPPDATA ?? "", "ReSkate");
-const REMEMBER = path.join(LOCAL, "pop-grader-relay.json");
+const REMEMBER = path.join(LOCAL, "pop-doctor-relay.json");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const stripBom = (t) => (t.charCodeAt(0) === 0xfeff ? t.slice(1) : t);
 
@@ -87,7 +87,7 @@ async function findGame() {
 const GAME = await findGame();
 try { mkdirSync(LOCAL, { recursive: true }); writeFileSync(REMEMBER, JSON.stringify({ game: GAME })); } catch { /* found again next time */ }
 const MODS = path.join(GAME, "Mods");
-const FORCED_ID = arg("--id") ?? process.env.POP_GRADER_ID;
+const FORCED_ID = arg("--id") ?? process.env.POP_DOCTOR_ID;
 const LOG = path.join(GAME, "logs", "ReSkate.log");
 const TRAINER = path.join(LOCAL, "trainer", "trainer.json");
 const POLL_MS = 250;
@@ -125,7 +125,7 @@ async function findTargets() {
   targets = ids.map((id) => path.join(MODS, ".reskate_plugin_data", id));
   dirty = true;
   if (ids.length) console.log(`plugin: ${ids.join(", ")}`);
-  else console.log(`plugin: Pop Grader is not in ${MODS} yet. Install it and turn it on; the relay keeps looking.`);
+  else console.log(`plugin: Pop Doctor is not in ${MODS} yet. Install it and turn it on; the relay keeps looking.`);
 }
 
 // Which pack an animation belongs to: the playlist that is on says first (its entries carry a pack), then the first
