@@ -1,4 +1,4 @@
-Pop Doctor relay 1.0.0
+Pop Doctor relay 1.1.0
 
 The Pop Doctor plugin shows which Animator Studio animation played and its pop grade.
 A plugin cannot read the game's log by itself, so this small program reads it and

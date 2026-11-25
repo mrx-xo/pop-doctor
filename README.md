@@ -18,6 +18,7 @@ animation that played, its pack and the pop grade. What a player reads about it 
 npm install                  once: the Luau VM the smoke test runs in
 node tool/smoke.mjs          load mod/ against a stand-in for the game and walk it through a session
 node tool/build.mjs          check mod/ against the store's and the game's rules, write the two zips, smoke test them
+node tool/butler-test.mjs    the Pop Butler module alone, through pops and what it learns
 node relay/pop-doctor-relay.mjs      the relay, straight from here
 bash tool/relay-test.sh relay/pop-doctor-relay.mjs      the relay against stand-in game folders (macOS, Linux)
 ```

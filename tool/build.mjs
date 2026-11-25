@@ -46,9 +46,11 @@ if (plugin.entry !== "plugin/main.lua") fail("reskate-plugin.json entry: plugin/
 if (!Array.isArray(plugin.permissions)) fail("reskate-plugin.json permissions: a list");
 
 // ---- main.lua: every call is covered by a permission asked for, every permission asked for is used -----------------
-const lua = read(path.join(MOD, "plugin", "main.lua"));
-if (Buffer.byteLength(lua) > 1024 * 1024) fail("plugin/main.lua is over 1 MB");
-const BASE = new Set(["log", "time", "on", "json", "package", "id", "api_version"]);
+// main.lua and the modules beside it (plugin/butler.lua ...), as one text: a line number counts on from main.lua's
+const luaFiles = ["main.lua", ...fs.readdirSync(path.join(MOD, "plugin")).filter((n) => /\.luau?$/.test(n) && n !== "main.lua").sort()];
+for (const n of luaFiles) if (fs.statSync(path.join(MOD, "plugin", n)).size > 1024 * 1024) fail(`plugin/${n} is over 1 MB`);
+const lua = luaFiles.map((n) => read(path.join(MOD, "plugin", n))).join("\n");
+const BASE = new Set(["log", "time", "on", "json", "package", "id", "api_version", "expose", "require_plugin"]);
 const AREA = { files: "files", animation: "skater.animation", menu: "menu" };
 // reading the skater and the physics is skater.read; these change them and need skater.control (api_skater.md)
 const CONTROL = {

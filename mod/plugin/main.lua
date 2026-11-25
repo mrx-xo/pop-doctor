@@ -77,6 +77,8 @@ local function default_settings()
         pack_style = 2,        -- one colour
         pack_colour = {r = 0.4768815040588379, g = 0.010944285430014133, b = 0.010944285430014133},
         pack_colours = {},     -- pack name -> {r, g, b}: the player's own picks under "per pack"; none to start with
+        air = {on = false, cap = false, tricks = {}}, -- the Pop Butler module, off to start with (plugin/butler.lua; its cfg fills in the rest)
+        trick_pop = {},        -- game trick id -> an Ollie height (min) of its own; no page sets it, only a tool (see reskate.expose below)
         packs_all = false,     -- the per-pack card lists every pack the relay knows, not only the ones seen this session
         grade_style = 2,       -- letter: L / M / H / G
         title_face = 4,        -- index into TITLE_FACES: clean (heading 22 px), brush (title 44 px), brush large (77.6 px), image
@@ -383,11 +385,70 @@ reskate.on("tick", function()
     ground.seen, ground.seen_at = name and string.lower(name) or nil, now()
 end)
 
+-- ---- the Pop Butler module: plugin/butler.lua -----------------------------------------------
+-- Off until the player switches it on (MODULES, or its own tab). On, it sets the game's "Ollie height (min)" for one
+-- pop at a time so a flip trick gets the air its animation lands from, and lets it go at the launch. Off, its tick
+-- returns at once: nothing is read and nothing is set. It is the one part that needs skater.control.
+local butler = require("butler")({now = now, settings = function() return settings end, save_settings = save_settings,
+    read_flip = read_flip, FLIP_GROUND = FLIP_GROUND, FLIP_NAMES = FLIP_NAMES})
+reskate.on("tick", function()
+    pcall(butler.pop_tick)
+    pcall(butler.tick)
+end)
+-- For tools: reskate.require_plugin("Pop_Doctor") in another plugin gives these two. StudioBridge's ops "air" and
+-- "trick_pop" hand their argument on, so its test rounds set and read Pop Butler as they did when it lived there.
+--   butler [{"on": true, "cap": false, "reset": "kickflip" | "all", "set": {"kickflip": {"aim": 2.9}}, "ceiling"|"start"|"step"|...: n}]
+--   trick_pop [{"set": {"360flip": 2.7}}]: the per-trick pop heights (they act only while Pop Butler is off)
+reskate.expose({
+    butler = function(a)
+        if type(a) ~= "table" then a = {} end
+        local pop, air = butler.pop, butler.air
+        local cfg = butler.cfg()
+        local touched = false
+        if a.on ~= nil then cfg.on, touched = a.on and true or false, true end
+        if a.cap ~= nil then cfg.cap, touched = a.cap and true or false, true end
+        for _, k in ipairs({"start", "step", "tight", "margin", "ceiling", "down", "fine", "near", "flat"}) do
+            if type(a[k]) == "number" then cfg[k], touched = a[k], true end
+        end
+        if a.reset == "all" then cfg.tricks, touched = {}, true elseif type(a.reset) == "string" then cfg.tricks[a.reset], touched = nil, true end
+        if type(a.set) == "table" then
+            for k, v in pairs(a.set) do
+                if type(k) == "string" and type(v) == "table" then cfg.tricks[k], touched = {lo = v.lo, hi = v.hi, n = type(v.n) == "number" and v.n or 0, ok = v.ok, conf = v.conf,
+                    aim = type(v.aim) == "number" and v.aim or nil, go = type(v.go) == "number" and v.go or nil}, true end
+            end
+        end
+        if touched then
+            if not cfg.on and pop.held and pop.held.air then butler.release("Pop Butler switched off") end
+            save_settings()
+        end
+        return {on = cfg.on, cap = cfg.cap, ceiling = cfg.ceiling, start = cfg.start, step = cfg.step, tight = cfg.tight, margin = cfg.margin, down = cfg.down, fine = cfg.fine,
+            near = cfg.near, flat = cfg.flat, a = cfg.a, b = cfg.b, base = air.base, tricks = cfg.tricks, held = pop.held, last = air.last, log = air.log, now = now()}
+    end,
+    trick_pop = function(a)
+        if type(a) ~= "table" then a = {} end
+        local pop = butler.pop
+        if type(a.set) == "table" then
+            local t = {}
+            for k, v in pairs(a.set) do if type(k) == "string" and type(v) == "number" and v > 0 and v < 20 then t[k] = v end end
+            settings.trick_pop = t
+            save_settings()
+        end
+        return {table = settings.trick_pop, held = pop.held, sets = pop.sets, reads = pop.reads, read_ms_each = pop.reads and pop.reads > 0 and pop.read_ms / pop.reads or nil,
+            log = pop.log, now = now()}
+    end,
+})
+
 -- ---- events -------------------------------------------------------------------------------
 reskate.on("trick_landed", function(e)
     hud.trick = {name = e.name, ms = e.ms, points = e.points, multiplier = e.multiplier, at = now()}
 end)
 reskate.on("launch", function(e)
+    do -- Pop Butler: what it held for this pop is let go now, and the flight is followed to its landing
+        local held = butler.pop.held
+        if held then pcall(butler.release, "launch", e.velocity and e.velocity.y) end
+        butler.pop.block = butler.pop.seen
+        pcall(butler.launch, e, held)
+    end
     hud.launch = {from = e.from, up = e.velocity.y, along = e.travel_speed, at = now(), after = hud.landing and hud.landing.at}
     -- the trick the game has in mind as it leaves the ground; else what the last tick on the ground read of it
     pcall(flip_sample, hud.launch)
@@ -918,7 +979,7 @@ local function tuned()
 end
 
 local tab = 1
-local TABS = {"MODULES", "SETTINGS", "HISTORY", "MISC"}
+local TABS = {"MODULES", "SETTINGS", "HISTORY", "MISC", "POP BUTLER"}
 
 -- MODULES: the plugin's parts, each with a switch of its own (2026-11-25). Pop Grader, the block in the corner, is
 -- the first: hud.on is its switch, saved as "on" (it was "Show the overlay" on SETTINGS).
@@ -927,7 +988,12 @@ local function modules_tab(ui)
     local was = hud.on
     hud.on = ui:toggle("on", "Pop Grader", hud.on)
     ui:note("Pop Grader: the block in the corner with the trick you just did, the animation that played, its pack and the pop grade. Its options are on SETTINGS, your last jumps on HISTORY.")
-    if hud.on ~= was then save_settings() end
+    local cfg = butler.cfg()
+    local butler_was = cfg.on
+    cfg.on = ui:toggle("butler_on", "Pop Butler", cfg.on)
+    ui:note("Pop Butler: lifts a flip trick's pop just enough for the trick to land itself, so no flip is cut short. It changes your pop for that one pop only, never your own settings. Its options and what it has learnt are on POP BUTLER. Off to start with.")
+    if cfg.on ~= butler_was and not cfg.on and butler.pop.held and butler.pop.held.air then pcall(butler.release, "Pop Butler switched off") end
+    if hud.on ~= was or cfg.on ~= butler_was then save_settings() end
 end
 
 local function settings_tab(ui)
@@ -1097,7 +1163,8 @@ reskate.menu.page("Pop Doctor", function(ui)
     if tab == 1 then modules_tab(ui)
     elseif tab == 2 then settings_tab(ui)
     elseif tab == 3 then history_tab(ui)
-    else misc_tab(ui) end
+    elseif tab == 4 then misc_tab(ui)
+    else butler.tab(ui, {info = info, fmt = fmt, title_case = title_case}) end
 end)
 
 load_settings()

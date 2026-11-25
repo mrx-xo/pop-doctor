@@ -2,5 +2,5 @@
     "api": 1,
     "entry": "plugin/main.lua",
     "side": "client",
-    "permissions": ["files", "skater.read", "skater.animation", "events.tricks", "events.skater", "overlay", "menu"]
+    "permissions": ["files", "skater.read", "skater.animation", "skater.control", "events.tricks", "events.skater", "overlay", "menu"]
 }

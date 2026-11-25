@@ -42,6 +42,9 @@ for _, p in ipairs(${toLua(manifest.permissions)}) do PERMS[p] = true end
 local PACKAGE = ${toLua(packageFiles)}
 local handlers, timers, pages, files, LOGS, clock = {}, {}, {}, {}, {}, 1000
 local TELEMETRY, AIR_TRICK = nil, nil
+local STRENGTH = nil -- the game's pop strength (Float.Intent.JumpStrength), nil while there is none
+local EXPOSED = {} -- what the plugin offers other plugins (reskate.expose)
+local TUNES = {} -- every reskate.physics.tune call: {id, value}; value nil = let go
 local FLIP = nil -- the game's flip value (EnumGS.Anim.CurrentFlipTrick): a number, nil while it is None
 local BACKWARDS = false -- Bool.Anim.BoardBackwards: the board end for end under the rider
 local UPRIGHT = true -- Bool.Physics.IsBoardUpright: the board on its wheels
@@ -97,6 +100,7 @@ local EVENT_PERMISSION = {trick_started = "events.tricks", trick_landed = "event
 
 local reskate = {
     id = "smoke", api_version = 1,
+    expose = function(t) EXPOSED = t end,
     log = function(s) LOGS[#LOGS + 1] = tostring(s) end,
     on = function(name, f)
         local need = EVENT_PERMISSION[name]
@@ -122,13 +126,16 @@ reskate.skater = area("skater.read", {telemetry = function() return TELEMETRY en
         local t = {["Animation/Dingo/Bool.Anim.BoardBackwards"] = {value = BACKWARDS, output = false},
             ["Animation/Dingo/Bool.Physics.IsBoardUpright"] = {value = UPRIGHT, output = true}}
         if FLIP then t["Animation/Dingo/EnumGS.Anim.CurrentFlipTrick"] = {value = FLIP, output = false} end
+        if STRENGTH then t["Animation/Dingo/Float.Intent.JumpStrength"] = {value = STRENGTH, output = false} end
         return t
     end})
-reskate.physics = area("skater.read", {find = function() return {} end})
+reskate.physics = area("skater.read", {find = function() return {} end, tuning = function() return {value = 1.5} end})
 -- reading the physics is skater.read; changing it is skater.control, and raises without it as the game does
 for _, name in ipairs({"tune", "competition", "prepare"}) do
-    reskate.physics[name] = function()
+    reskate.physics[name] = function(id, value)
         if not PERMS["skater.control"] then error("needs the skater.control permission (physics." .. name .. ")") end
+        if name == "tune" then TUNES[#TUNES + 1] = {id = id, value = value} end
+        return true
     end
 end
 reskate.animation = area("skater.animation", {trick = function() return AIR_TRICK end, playing = function() return false end})
@@ -344,6 +351,38 @@ clock += 1000; run_timers()
 draw()
 assert(drew("Heelflip") and not drew("Kickflip"), "after a quick heelflip with no score the overlay draws: " .. table.concat(DRAWN.texts, " | "))
 report[#report + 1] = "a quick pop with no score event after a scored one: the overlay shows the new trick"
+
+-- 3d. the Pop Butler module: off to start with and then it touches nothing; switched on, a weak pop of a flip trick
+-- gets the game's "Ollie height (min)" set for that pop and let go at the launch
+local function weak_kickflip()
+    TUNES = {}
+    clock += 2000
+    FLIP, STRENGTH = 2, 0.2 -- Kickflip, a light pop
+    TELEMETRY = {airborne = false, physics_state = 103, last = {serial = 0}}
+    fire("tick", 16); fire("tick", 16)
+    local set = #TUNES
+    fire("launch", {from = "ollie", velocity = vector.create(0, 2.7, 0), travel_speed = 5, game = {}, shaped = false})
+    FLIP, STRENGTH = nil, nil
+    return set
+end
+reset()
+PLUGIN()
+assert(weak_kickflip() == 0 and #TUNES == 0, "Pop Butler is off to start with, yet the plugin tuned the physics " .. #TUNES .. " times")
+reset()
+files["settings.json"] = encode({on = true, air = {on = true, cap = false, tricks = {}}})
+PLUGIN()
+local set = weak_kickflip()
+assert(set == 1 and TUNES[1].id == "PhysicsMode.JumpMinHeight" and type(TUNES[1].value) == "number" and TUNES[1].value > 1.5,
+    "Pop Butler on: a weak kickflip should lift Ollie height (min) once before the launch, got " .. set .. " sets")
+assert(#TUNES == 2 and TUNES[2].value == nil, "Pop Butler did not let the value go at the launch")
+do -- what a tool reaches through reskate.require_plugin("Pop_Doctor"): read, switch off, read back
+    assert(type(EXPOSED.butler) == "function" and type(EXPOSED.trick_pop) == "function", "the plugin does not expose butler and trick_pop")
+    local was = EXPOSED.butler({})
+    assert(was.on == true and was.ceiling == 2.95 and type(was.log) == "table", "exposed butler({}) did not give Pop Butler's state")
+    assert(EXPOSED.butler({on = false, ceiling = 3.1}).on == false and EXPOSED.butler(nil).ceiling == 3.1, "exposed butler did not take a setting")
+    assert(next(EXPOSED.trick_pop({set = {kickflip = 2.4}}).table) == "kickflip", "exposed trick_pop did not take its table")
+end
+report[#report + 1] = string.format("Pop Butler: off, nothing is tuned; on, a weak kickflip gets Ollie height (min) %.2f for that pop (the player's 1.50) and it is let go at the launch", TUNES[1].value)
 
 -- 4. which pop a choice of the Studio is about (the relay numbers each choice: sel), "Stock" as a finding, and the
 -- pop grade from the launch's up-speed. Text faces, so the lines are d:text and can be read back.

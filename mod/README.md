@@ -1,6 +1,6 @@
 # Pop Doctor
 
-Pop tools for ReSkate, as modules you switch on and off. Version 1 has one module: Pop Grader.
+Pop tools for ReSkate, as modules you switch on and off. Two so far: Pop Grader and Pop Butler.
 
 ## Pop Grader
 
@@ -52,16 +52,33 @@ that the relay is running.
 Animation and pack details need the relay. Ordinary pops still get an estimated low, mid or high grade
 from the upward speed at takeoff.
 
+## Pop Butler
+
+Off to start with. Switch it on at F2 > PLUGINS > Pop Doctor > MODULES.
+
+Ever flick a kickflip with a lazy pop and watch the flip get rushed, or land in that deep crouch? Every flip trick
+has a longest air it can land itself from. Pop Butler finds it and puts your pop just under it.
+
+- When the game names a flip trick on the ground and your pop would fall short, that one pop gets lifted.
+- It learns each trick from your own flat ground pops. The first few pops of a trick are the search.
+- It never lifts a pop past the ceiling you set, and it leaves ollies and big pops alone.
+- Your own Ollie height setting and your Trainer file are never changed. The lift lasts for one pop.
+- It needs no relay.
+
+Still being tuned, so expect rough edges. At very high gravity (around 2x) some tricks have no pop that works,
+a low kickflip for one.
+
 ## Settings
 
 F2 > PLUGINS > Pop Doctor
 
-- MODULES: each module's switch. Pop Grader is on to start with.
+- MODULES: each module's switch. Pop Grader is on to start with, Pop Butler is off.
 - SETTINGS: the corner, the layout (three lines, two lines, one line), the font, the size, the distance
   from the edge, hiding the block some seconds after a landing, which lines show, how the pop grade is written
   (dot, letter, short, word, pop, badge), the pack badge and its colours, the backing box, the grade colours.
 - HISTORY: the last 10 jumps. Open one for its animation, flight and landing numbers.
 - MISC: the speeds a stock pop is graded low, mid or high by. They settle on your own pops as you skate.
+- POP BUTLER: its switch, the ceiling, the last pop and what it has learnt for each trick.
 
 Settings are kept in the plugin's data folder: Mods\.reskate_plugin_data\<this plugin's folder>\settings.json
 
@@ -70,6 +87,8 @@ Settings are kept in the plugin's data folder: Mods\.reskate_plugin_data\<this p
 - files: its settings, and the relay's studio.json, in its own data folder
 - skater.read: air time, height and speeds of a jump
 - skater.animation: only to read the game's name for the trick in the air; it plays and replaces nothing
+- skater.control: Pop Butler only, and only while it is switched on. It sets the game's light-pop height for one pop
+  and lets it go at takeoff. With Pop Butler off, nothing about your skater is touched.
 - events.tricks, events.skater: when a trick lands, a pop leaves the ground, the board lands
 - overlay: drawing the block
 - menu: the F2 page
