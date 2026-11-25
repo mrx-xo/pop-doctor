@@ -25,17 +25,11 @@ bash tool/relay-test.sh relay/pop-doctor-relay.mjs      the relay against stand-
 The name, version, description and website are `mod/manifest.json`. The permissions are `mod/reskate-plugin.json`:
 the build stops when the plugin calls something they do not cover, and when one of them is not used.
 
-## Until the overlay leaves StudioBridge
+## Where the plugin is written
 
-`mod/plugin/main.lua` and `tool/smoke.mjs` are still made from the StudioBridge project, where the overlay is worked
-on for now:
-
-```
-node tool/import-from-studio-bridge.mjs            make the two files again from ../studio-bridge
-node tool/import-from-studio-bridge.mjs --check    are they up to date?
-```
-
-Do not edit those two files by hand until that script is deleted: the next import would undo it.
+Here. `mod/plugin/main.lua` is the plugin and `tool/smoke.mjs` is its test: edit them in this project, then run the
+build. Until 2026-11-25 both were made from the StudioBridge project by an import script. That script is gone, and so
+is the rule against editing them by hand.
 
 ## The pictures
 
