@@ -234,12 +234,10 @@ local function all_pages()
     end
     return most, tabs
 end
--- The HISTORY tab (the last tab) with every jump open, newest first: each jump's title, and its rows of one label.
+-- The HISTORY tab (tab 2) with every jump open, newest first: each jump's title, and its rows of one label.
 local function history(label)
     OPEN_ALL = true
-    local ui = make_ui(1)
-    pages[1].build(ui)       -- the first tab says how many tabs there are
-    ui = make_ui(ui.tabs_n)
+    local ui = make_ui(2)
     pages[1].build(ui)
     OPEN_ALL = false
     assert(ui.n <= 160, "the HISTORY tab with every jump open has " .. ui.n .. " widgets; a page holds 160")

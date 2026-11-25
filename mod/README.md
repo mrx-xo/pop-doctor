@@ -13,7 +13,7 @@ An F2 page holds every setting and the details of your last 10 jumps.
 1. This plugin.
 2. The Pop Grader relay, a small program that runs beside the game.
 
-RELAY LINK MISSING: put the download link of the relay zip here before uploading.
+Download the relay: https://github.com/mrx-xo/pop-grader/releases/latest (the file named Pop_Grader_Relay, under Assets).
 
 The relay needs Node.js 18 or newer: https://nodejs.org (the LTS installer, all defaults).
 
@@ -51,6 +51,7 @@ F2 > PLUGINS > Pop Grader
   from the edge, hiding the block some seconds after a landing, which lines show, how the pop grade is written
   (dot, letter, short, word, pop, badge), the pack badge and its colours, the backing box, the grade colours.
 - HISTORY: the last 10 jumps. Open one for its animation, flight and landing numbers.
+- MISC: the speeds a stock pop is graded low, mid or high by. They settle on your own pops as you skate.
 
 Settings are kept in the plugin's data folder: Mods\.reskate_plugin_data\<this plugin's folder>\settings.json
 

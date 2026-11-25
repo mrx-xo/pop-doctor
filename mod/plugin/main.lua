@@ -76,15 +76,7 @@ local function default_settings()
         show_grinds = true,    -- a grind gets a grade mark too (G / GRIND / Grind / dot in the grind colour)
         pack_style = 2,        -- one colour
         pack_colour = {r = 0.4768815040588379, g = 0.010944285430014133, b = 0.010944285430014133},
-        pack_colours = {
-            ["Animation"] = {r = 0.5889999866485596, g = 0.36606666445732117, b = 0.17100000381469727},
-            ["Digi Steeze 2"] = {r = 0.17100000381469727, g = 0.5889999866485596, b = 0.44269999861717224},
-            ["Murdas Animation pack"] = {r = 0.5889999866485596, g = 0.2894333302974701, b = 0.17100000381469727},
-            ["ProPack"] = {r = 0.18493333458900452, g = 0.5889999866485596, b = 0.17100000381469727},
-            ["THAT STEEZE"] = {r = 0.17100000381469727, g = 0.5889999866485596, b = 0.3172999918460846},
-            ["Warlock Trick Grimoire"] = {r = 0.17100000381469727, g = 0.5889999866485596, b = 0.4078666567802429},
-            ["smonkpack"] = {r = 0.5889999866485596, g = 0.17100000381469727, b = 0.540233314037323},
-        },
+        pack_colours = {},     -- pack name -> {r, g, b}: the player's own picks under "per pack"; none to start with
         packs_all = false,     -- the per-pack card lists every pack the relay knows, not only the ones seen this session
         grade_style = 2,       -- letter: L / M / H / G
         title_face = 4,        -- index into TITLE_FACES: clean (heading 22 px), brush (title 44 px), brush large (77.6 px), image
@@ -449,11 +441,35 @@ local function grade_colour(grade)
 end
 
 -- The game's trick id ("fspopshuvit") as the Studio names it ("FS Pop Shuv-it"): the relay sends a names map
--- built from the trick files; an id it does not know is shown with a capital.
+-- built from the trick files. The relay only knows the tricks that have a Studio trick installed, so a player
+-- with one small pack gets few names from it: TRICK_NAMES holds the game's flip tricks and stands in. An id
+-- neither knows is shown with a capital.
+local TRICK_NAMES = {
+    ollie = "Ollie", olliepop = "Ollie", nollie = "Nollie", n_olliepop = "Nollie",
+    kickflip = "Kickflip", heelflip = "Heelflip", popshuvit = "Pop Shuv-it", fspopshuvit = "FS Pop Shuv-it",
+    varialkickflip = "Varial Kickflip", varialheelflip = "Varial Heelflip", hardflip = "Hardflip",
+    inwardheelflip = "Inward Heelflip", laserflip = "Laser Flip",
+    ["360flip"] = "360 Flip", ["360popshuvit"] = "360 Pop Shuv-it", fs360popshuvit = "FS 360 Pop Shuv-it",
+    ["360hardflip"] = "360 Hardflip", ["360inwardheelflip"] = "360 Inward Heelflip",
+    bsimpossible = "BF Impossible", fsimpossible = "FF Impossible",
+    impossible = "BF Impossible", frontfoot_impossible = "FF Impossible",
+    n_kickflip = "Nollie Kickflip", n_heelflip = "Nollie Heelflip", n_popshuvit = "Nollie Pop Shuv-it",
+    n_fspopshuvit = "Nollie FS Pop Shuv-it", n_varialkickflip = "Nollie Varial Kickflip",
+    n_varialheelflip = "Nollie Varial Heelflip", n_hardflip = "Nollie Hardflip",
+    n_inwardheelflip = "Nollie Inward Heelflip", n_laserflip = "Nollie Laser Flip",
+    n_360flip = "Nollie 360 Flip", n_360popshuvit = "Nollie 360 Pop Shuv-it",
+    n_fs360popshuvit = "Nollie FS 360 Pop Shuv-it", n_360hardflip = "Nollie 360 Hardflip",
+    n_360inwardheelflip = "Nollie 360 Inward Heelflip",
+    n_bsimpossible = "Nollie BF Impossible", n_fsimpossible = "Nollie FF Impossible",
+    n_backfoot_impossible = "Nollie BF Impossible", n_impossible = "Nollie FF Impossible",
+    wallie = "Wallie", fswallie = "FS Wallie", bswallie = "BS Wallie",
+}
 local function title_case(s)
     if not s or s == "" then return nil end
     local names = hud.studio and hud.studio.names
     if type(names) == "table" and names[s] then return names[s] end
+    local known = TRICK_NAMES[string.lower(s)]
+    if known then return known end
     return (s:gsub("^%l", string.upper))
 end
 
@@ -897,7 +913,7 @@ local function tuned()
 end
 
 local tab = 1
-local TABS = {"SETTINGS", "HISTORY"}
+local TABS = {"SETTINGS", "HISTORY", "MISC"}
 
 local function settings_tab(ui)
     local before = reskate.json.encode(settings) .. tostring(hud.on)
@@ -906,18 +922,15 @@ local function settings_tab(ui)
     settings.corner = ui:buttons("corner", CORNERS, settings.corner) or settings.corner
     ui:label("Layout")
     settings.layout = ui:buttons("layout", LAYOUTS, settings.layout) or settings.layout
-    ui:label("The trick's face")
-    settings.title_face = ui:buttons("title_face", TITLE_FACES, settings.title_face) or settings.title_face
-    ui:note("image: the name in the plugin's own fonts, sharp at any size. clean: heading face 22 px. brush: marker title face 44 px. brush large: page titles' face 78 px. The game bakes each font once: those three are sharp at 1.00x only.")
-    if TITLE_FACES[settings.title_face] == "image" then
-        if #TEXT_FONTS == 0 then
-            ui:warn("The plugin's font pictures are missing: install the plugin again.")
-        else
-            local names = {}
-            for i, f in ipairs(TEXT_FONTS) do names[i] = cut(f.name, 40) end
-            ui:label("Font")
-            settings.image_font = ui:buttons("image_font", names, settings.image_font) or settings.image_font
-        end
+    -- The trick's name is always drawn in the plugin's own fonts (the "image" face). The game's three faces were a
+    -- choice here until 2026-11-25; title_face stays in the settings file, where a hand edit and the tests still set it.
+    if #TEXT_FONTS == 0 then
+        ui:warn("The plugin's font pictures are missing: install the plugin again.")
+    else
+        local names = {}
+        for i, f in ipairs(TEXT_FONTS) do names[i] = cut(f.name, 40) end
+        ui:label("Font")
+        settings.image_font = ui:buttons("image_font", names, settings.image_font) or settings.image_font
     end
     settings.scale = ui:slider("scale", "Size", settings.scale, 0.5, 2, "%.2fx")
     settings.margin = math.floor(ui:slider("margin", "Distance from the edge", settings.margin, 0, 200, "%d px") + 0.5)
@@ -996,13 +1009,6 @@ local function history_tab(ui)
         ui:warn(cut(s.missing, 300))
     end
     ui:card("LAST " .. STRIP_MAX .. " JUMPS", "Newest first. Open a jump for its animation, flight and landing details.")
-    -- the cutoffs are the player's own once the game has graded enough pops on both sides of them (cal_sample), not before
-    local mid_own = settings.pop_cut_mid_own or settings.pop_cut_mid ~= 3.135
-    local high_own = settings.pop_cut_high_own or settings.pop_cut_high ~= 3.52
-    info(ui, "Pop grades", mid_own and high_own and string.format("mid from %s, high from %s m/s up", fmt(settings.pop_cut_mid, 2), fmt(settings.pop_cut_high, 2))
-        or mid_own and string.format("mid from %s m/s up", fmt(settings.pop_cut_mid, 2))
-        or high_own and string.format("high from %s m/s up", fmt(settings.pop_cut_high, 2))
-        or "still grading, pop more")
     local fold_action = ui:buttons("history_fold", {"Fold all", "Expand all"})
     if fold_action then
         for _, e in ipairs(hud.strip) do e.history_open = fold_action == 2 end
@@ -1014,9 +1020,9 @@ local function history_tab(ui)
     local max_air = 1
     for _, e in ipairs(hud.strip) do max_air = math.max(max_air, e.air or 0) end
     ui:note("Air bars share a scale. Frame counts use 30 fps. Trainer values are snapshots from the relay; - means unavailable.")
-    -- what is left for open jumps: the page's 160, less the 6 above (tabs, warning, card, the grades line, buttons, note),
+    -- what is left for open jumps: the page's 160, less the 5 above (tabs, warning, card, buttons, note),
     -- less a section and a one-line note for every jump
-    local room = 160 - 6 - 2 * #hud.strip
+    local room = 160 - 5 - 2 * #hud.strip
     local in_full = math.floor(room / HISTORY_OPEN)
     for i = #hud.strip, 1, -1 do
         local e = hud.strip[i]
@@ -1059,10 +1065,24 @@ local function history_tab(ui)
     end
 end
 
+-- MISC: what has no other home. For now the cutoffs a stock pop is graded by (moved from HISTORY, 2026-11-25).
+local function misc_tab(ui)
+    ui:card("POP GRADES", "How a stock pop gets its grade")
+    -- the cutoffs are the player's own once the game has graded enough pops on both sides of them (cal_sample), not before
+    local mid_own = settings.pop_cut_mid_own or settings.pop_cut_mid ~= 3.135
+    local high_own = settings.pop_cut_high_own or settings.pop_cut_high ~= 3.52
+    info(ui, "Pop grades", mid_own and high_own and string.format("mid from %s, high from %s m/s up", fmt(settings.pop_cut_mid, 2), fmt(settings.pop_cut_high, 2))
+        or mid_own and string.format("mid from %s m/s up", fmt(settings.pop_cut_mid, 2))
+        or high_own and string.format("high from %s m/s up", fmt(settings.pop_cut_high, 2))
+        or "still grading, pop more")
+    ui:note("The Studio grades its own animations. A stock pop is graded by how fast you leave the ground. The cutoffs start at the game's and settle on your own pops as you skate.")
+end
+
 reskate.menu.page("Pop Grader", function(ui)
     tab = ui:tabs("tabs", TABS, tab)
     if tab == 1 then settings_tab(ui)
-    else history_tab(ui) end
+    elseif tab == 2 then history_tab(ui)
+    else misc_tab(ui) end
 end)
 
 load_settings()

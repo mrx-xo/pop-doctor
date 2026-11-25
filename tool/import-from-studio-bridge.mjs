@@ -133,22 +133,22 @@ swap("-- studio.json is the tool's relay of the Studio's log lines (tool/src/rel
   "-- studio.json is the relay's account of the Studio's log lines (relay/pop-grader-relay.mjs): what played, the pop grade, when");
 cut("local function poll()", "-- ---- the overlay ------", "reskate.time.every(POLL_MS, read_studio)\n\n");
 
-// ---- the F2 page: two tabs (the LIVE tab went on 2026-11-24: the newest jump of HISTORY says the same) ------------------------------------------------------------------------------------
+// ---- the F2 page: three tabs, SETTINGS / HISTORY / MISC (the LIVE tab went on 2026-11-24: the newest jump of HISTORY says the same; MISC came on 2026-11-25) ------------------------------------------------------------------------------------
 swap("HISTORY (last 10 jumps), BRIDGE (tool state).", "HISTORY (last 10 jumps).");
-swap(`local TABS = {"SETTINGS", "POP BUTLER", "HISTORY", "BRIDGE"}`, `local TABS = {"SETTINGS", "HISTORY"}`);
+swap(`local TABS = {"SETTINGS", "POP BUTLER", "HISTORY", "MISC", "BRIDGE"}`, `local TABS = {"SETTINGS", "HISTORY", "MISC"}`);
 cut("local function bridge_tab(ui)", `reskate.menu.page("StudioBridge"`, "");
 swap(`    if tab == 1 then settings_tab(ui)
     elseif tab == 2 then air_tab(ui)
     elseif tab == 3 then history_tab(ui)
+    elseif tab == 4 then misc_tab(ui)
     else bridge_tab(ui) end`,
   `    if tab == 1 then settings_tab(ui)
-    else history_tab(ui) end`);
+    elseif tab == 2 then history_tab(ui)
+    else misc_tab(ui) end`);
 cut("-- ---- console: bridge <op>", null, `log("loaded")\n`);
 
 // ---- what a player reads ----------------------------------------------------------------------------------------
 swap(`clip = "no relay"`, `clip = "relay not running"`);
-swap(`"image: the name as a pre-rendered picture, sharp at any size (tool/src/render-text.ps1). clean:`,
-  `"image: the name in the plugin's own fonts, sharp at any size. clean:`);
 swap(`ui:warn("No text pictures in the package: run  powershell -File tool/src/render-text.ps1")`,
   `ui:warn("The plugin's font pictures are missing: install the plugin again.")`);
 swap(`ui:warn("No relay: run  node tool/src/relay.mjs  and leave it open.")`,
@@ -237,12 +237,10 @@ local report = {}
 `,
   `    return most, tabs
 end
--- The HISTORY tab (the last tab) with every jump open, newest first: each jump's title, and its rows of one label.
+-- The HISTORY tab (tab 2) with every jump open, newest first: each jump's title, and its rows of one label.
 local function history(label)
     OPEN_ALL = true
-    local ui = make_ui(1)
-    pages[1].build(ui)       -- the first tab says how many tabs there are
-    ui = make_ui(ui.tabs_n)
+    local ui = make_ui(2)
     pages[1].build(ui)
     OPEN_ALL = false
     assert(ui.n <= 160, "the HISTORY tab with every jump open has " .. ui.n .. " widgets; a page holds 160")
