@@ -9,6 +9,8 @@
 // It pins down the two-sided rule (2026-11-24): the search, what is not learnt from, the FS shuv case of that morning
 // (one let go costs 0.04 m/s and is paid back in 20 clean pops; the rule before it left the aim 0.08 lower for good),
 // an aim that sits far too low climbing back, a noisy limit (about one let go in 20 pops), entries learnt before the rule.
+// And that what is held over the player's value is always let go (2026-11-25): its module switched off under it, the
+// trick on the ground no longer the one it was set for, a let go that fails.
 // It is a stand-in, not the game: it says nothing about how a landing looks.
 
 import fs from "node:fs";
@@ -25,6 +27,9 @@ local FLIP, STRENGTH, CAN, PLAN = nil, 0, nil, nil -- what the game's animation 
 local BASE = 1.5                                   -- the player's own Ollie height (min)
 local HELD = nil                                   -- what a plugin holds over it
 local TUNES, SAVES = {}, 0
+local FAIL_LET_GO = 0                              -- so many let gos fail, as the game would say no
+local UNREADABLE = false                           -- the animation values cannot be read
+local OTHER = nil                                  -- what another plugin holds over the player's value
 local A, B = 2.686, 14.907                         -- the game's takeoff law (the module starts from the same numbers)
 local SETTINGS = {air = {on = true, cap = false, tricks = {}}, trick_pop = {}}
 local FLIP_NAMES = {"Ollie", "Kickflip", "Heelflip", "PopShuvit", "VarialKickflip", "Hardflip"}
@@ -41,18 +46,26 @@ reskate = {
     physics = {
         tune = function(id, v)
             assert(id == "PhysicsMode.JumpMinHeight", "tuned " .. tostring(id))
+            if v == nil and FAIL_LET_GO > 0 then
+                FAIL_LET_GO -= 1
+                return false, "the game said no"
+            end
             HELD = v
             TUNES[#TUNES + 1] = v == nil and "let go" or string.format("%.3f", v)
             return true
         end,
-        tuning = function(id) return {value = HELD or BASE} end,
+        -- as the game: the value in force, and the plugin that holds one over the player's own
+        tuning = function(id) return {value = OTHER or HELD or BASE, tuner = OTHER and "Another_Plugin" or (HELD and "Pop_Doctor" or nil)} end,
     },
 }
 local env = {
     now = function() return clock end,
     settings = function() return SETTINGS end,
     save_settings = function() SAVES += 1 end,
-    read_flip = function() return FLIP, nil, {["Animation/Dingo/Float.Intent.JumpStrength"] = {value = STRENGTH}} end,
+    read_flip = function()
+        if UNREADABLE then return nil, "no values", nil end
+        return FLIP, nil, {["Animation/Dingo/Float.Intent.JumpStrength"] = {value = STRENGTH}}
+    end,
     FLIP_GROUND = 39, FLIP_NAMES = FLIP_NAMES,
 }
 local function MODULE()
@@ -218,6 +231,111 @@ local found = false
 for _, r in ipairs(rows) do if r:find("^Heelflip: aim 2%.5%d m/s | last landed itself 2%.5%d, last let go 2%.5%d %(220 pops%)$") then found = true end end
 assert(found, "the LEARNT row of the heelflip: " .. table.concat(rows, " | "))
 report[#report + 1] = "the POP BUTLER tab draws " .. #rows .. " rows"
+
+-- 8. what is held is always let go (the review of 2026-11-25). Before: a new settings table with Pop Butler off in it (the
+-- "Back to the defaults" of that day) left a lifted pop lifted for good, an armed kickflip that became an ollie kept the
+-- kickflip's height, and a let go that failed was forgotten.
+local function arm(flip, s) -- the game names a trick on the ground; no launch follows
+    STATE, FLIP = 100, nil
+    tick(3)
+    clock += 1600
+    tick(1)
+    FLIP, STRENGTH = flip, s
+    tick(2)
+end
+-- 8a. its module is switched off under it
+local learnt = SETTINGS
+arm(KICK, 0.10)
+assert(HELD ~= nil and pop.held and pop.held.air, "a weak kickflip was not lifted")
+SETTINGS = {air = {on = false, cap = false, tricks = {}}, trick_pop = {}} -- a new settings table, Pop Butler off in it
+tick(1)
+assert(HELD == nil and pop.held == nil, "a new settings table with Pop Butler off, a pop lifted: the lift stayed, " .. tostring(HELD))
+SETTINGS.trick_pop = {kickflip = 2.4}
+arm(KICK, 0.10)
+assert(HELD == 2.4 and pop.held and not pop.held.air, "the table did not set its height: " .. tostring(HELD))
+SETTINGS.trick_pop = {}
+tick(1)
+assert(HELD == nil and pop.held == nil, "the table was emptied while it held a height: the height stayed, " .. tostring(HELD))
+SETTINGS.trick_pop = {kickflip = 2.4}
+arm(KICK, 0.10)
+SETTINGS.air.on = true
+tick(1)
+assert(pop.held and pop.held.air and HELD ~= 2.4, "Pop Butler switched on over a height of the table: the table's stayed, " .. tostring(HELD))
+assert(butler.release("the test") == true and HELD == nil, "a let go that works says so")
+SETTINGS = learnt
+report[#report + 1] = "held and its module goes: a new settings table with it off, the table emptied, Pop Butler switched on over the table: let go on the next tick"
+
+-- 8b. the trick on the ground is no longer the one it was set for
+arm(KICK, 0.10)
+assert(HELD ~= nil, "a weak kickflip was not lifted")
+FLIP = OLLIE
+tick(1)
+assert(HELD == nil and pop.held == nil, "an armed kickflip became an ollie and kept the kickflip's lift: " .. tostring(HELD))
+arm(KICK, 0.10)
+FLIP = nil
+tick(1)
+assert(HELD == nil and pop.held == nil, "the game dropped the trick and the lift stayed: " .. tostring(HELD))
+arm(KICK, 0.10)
+local kick_min = HELD
+FLIP = HEEL
+tick(1)
+assert(pop.held and pop.held.trick == "heelflip" and HELD ~= kick_min and near(pop.held.target, aim_of("heelflip")),
+    "a kickflip became a heelflip: the lift is not the heelflip's, " .. tostring(HELD))
+UNREADABLE = true
+tick(3)
+assert(pop.held and pop.held.trick == "heelflip" and HELD ~= nil, "ticks the values could not be read on let the lift go")
+UNREADABLE = false
+tick(1)
+assert(pop.held and HELD ~= nil, "the values read again, the same trick: the lift was let go")
+clock += 700
+tick(1)
+assert(HELD == nil and pop.held == nil, "no launch came for 700 ms and the lift stayed")
+SETTINGS.air.on = false
+SETTINGS.trick_pop = {kickflip = 2.4, heelflip = 1.9}
+arm(KICK, 0.10)
+assert(HELD == 2.4, "the table did not set the kickflip's height: " .. tostring(HELD))
+FLIP = HEEL
+tick(1)
+assert(HELD == 1.9 and pop.held.trick == "heelflip", "the table, a kickflip that became a heelflip: the height is " .. tostring(HELD) .. ", the heelflip's is 1.9")
+FLIP = OLLIE
+tick(1)
+assert(HELD == nil and pop.held == nil, "the table, a listed trick that became an ollie: the height stayed, " .. tostring(HELD))
+SETTINGS.trick_pop = {}
+SETTINGS.air.on = true
+report[#report + 1] = "held and the trick changes: an ollie or no trick lets it go at once, another flip gets its own, unreadable ticks keep it"
+
+-- 8c. a let go that fails is tried again on every tick, and until then nothing else is set or read
+arm(KICK, 0.10)
+local lifted = HELD
+FAIL_LET_GO = 3
+assert(butler.release("launch", 2.75) == false and HELD == lifted and pop.held and pop.held.letting == "launch", "a let go that failed forgot what is held")
+STATE, FLIP = 201, nil
+tick(2)
+assert(HELD == lifted and pop.held and pop.held.tries == 3, "a failed let go is tried once a tick: " .. tostring(pop.held and pop.held.tries))
+tick(1)
+assert(HELD == nil and pop.held == nil, "the fourth try works, yet the lift stayed: " .. tostring(HELD))
+assert(pop.log[#pop.log].note:find("%(launch%), left at 2.75 m/s up, at try 4"), "the note of a late let go: " .. pop.log[#pop.log].note)
+arm(KICK, 0.10)
+lifted = HELD
+FAIL_LET_GO = 100000
+butler.release("launch", 2.75)
+FLIP = nil
+clock += 2000
+tick(5)
+assert(HELD == lifted and near(air.base, BASE), "a lift that cannot be let go was read as the player's own value: " .. tostring(air.base))
+local sets = pop.sets
+FLIP = KICK
+tick(2)
+assert(pop.sets == sets and HELD == lifted, "a new value was set while the old one could not be let go")
+FLIP, FAIL_LET_GO = nil, 0
+tick(1)
+assert(HELD == nil and pop.held == nil, "the game takes the let go again, yet the lift stayed: " .. tostring(HELD))
+OTHER = 3.3
+clock += 1600
+tick(1)
+assert(near(air.base, BASE), "what another plugin holds was read as the player's own value: " .. tostring(air.base))
+OTHER = nil
+report[#report + 1] = "a let go that fails: kept, tried again every tick, nothing set or read meanwhile. Another plugin's value is not read as the player's"
 assert(SAVES > 0, "nothing was saved")
 return table.concat(report, "\\n")
 `;

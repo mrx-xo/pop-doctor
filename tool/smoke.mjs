@@ -162,6 +162,7 @@ end
 -- The page's widgets, with the limits the notes record: 160 widgets a page, an info label 60 and value 200
 -- characters, a section's title 60 and subtitle 120.
 local OPEN_ALL = false -- every section of a page comes back open: the HISTORY tab then shows each jump's rows
+local PRESS = nil      -- the id of the button that is pressed on the next page drawn
 local function make_ui(tab)
     local ui = {n = 0, tabs_n = 0, titles = {}, rows = {}} -- titles: each section's title; rows: each info row, "label: value"
     local function w() ui.n += 1 end
@@ -175,7 +176,7 @@ local function make_ui(tab)
     function ui:warn(text) w(); assert(type(text) == "string") end
     function ui:slider(id, label, value) w(); assert(type(value) == "number", "slider " .. id .. " is not a number"); return value end
     function ui:colour(id, label, value) w(); within(label, 60, "colour label"); assert(type(value) == "table" and value.r, "colour " .. id); return value end
-    function ui:button() w(); return false end
+    function ui:button(id) w(); return id ~= nil and id == PRESS end
     function ui:info(label, value)
         w(); within(label, 60, "info label"); within(value, 200, "info value")
         ui.rows[#ui.rows + 1] = tostring(label) .. ": " .. tostring(value)
@@ -386,6 +387,41 @@ do -- what a tool reaches through reskate.require_plugin("Pop_Doctor"): read, sw
     assert(pcall(EXPOSED.overlay, {corner = "middle"}) == false, "exposed overlay took a corner that does not exist")
 end
 report[#report + 1] = string.format("Pop Butler: off, nothing is tuned; on, a weak kickflip gets Ollie height (min) %.2f for that pop (the player's 1.50) and it is let go at the launch", TUNES[1].value)
+
+-- 3e. "Back to the defaults" (SETTINGS) is the overlay's alone: Pop Butler keeps its switch, its options, what it has
+-- learnt and the table of pop heights, and a pop it has lifted just then keeps its lift up to the launch. Before
+-- 2026-11-25 the button made the whole settings table new: Pop Butler off, every learnt aim gone, and the lift of a pop
+-- under way never let go.
+EXPOSED.trick_pop({set = {heelflip = 1.9}})
+EXPOSED.butler({on = true, ceiling = 3.1, set = {kickflip = {aim = 2.6, go = 1, n = 12}}})
+EXPOSED.overlay({corner = "top-right"})
+FLIP, STRENGTH = nil, nil
+TELEMETRY = {airborne = false, physics_state = 103, last = {serial = 0}}
+fire("tick", 16) -- the launch before this one is over: its trick is no longer the one on the ground
+TUNES = {}
+clock += 2000
+FLIP, STRENGTH = 2, 0.2 -- Kickflip, a light pop
+fire("tick", 16); fire("tick", 16)
+assert(#TUNES == 1 and type(TUNES[1].value) == "number", "Pop Butler on again: a weak kickflip should be lifted, got " .. #TUNES .. " tunes")
+PRESS = "defaults"
+pages[1].build(make_ui(2))
+PRESS = nil
+assert(EXPOSED.overlay(nil).corner ~= "top-right", "Back to the defaults did not put the overlay's corner back")
+do
+    local b = EXPOSED.butler(nil)
+    assert(b.on == true, "Back to the defaults switched Pop Butler off")
+    assert(b.ceiling == 3.1, "Back to the defaults changed Pop Butler's ceiling: " .. tostring(b.ceiling))
+    assert(type(b.tricks.kickflip) == "table" and b.tricks.kickflip.aim == 2.6 and b.tricks.kickflip.n == 12, "Back to the defaults lost what Pop Butler had learnt")
+    assert(EXPOSED.trick_pop(nil).table.heelflip == 1.9, "Back to the defaults emptied the table of pop heights")
+    local saved = files["settings.json"]
+    assert(type(saved) == "string" and saved:find("kickflip", 1, true) and saved:find("heelflip", 1, true), "Back to the defaults: the saved settings lost Pop Butler's part")
+end
+fire("tick", 16)
+assert(#TUNES == 1, "Back to the defaults with a pop lifted: the lift was dropped or set again (" .. #TUNES .. " tunes)")
+fire("launch", {from = "ollie", velocity = vector.create(0, 2.7, 0), travel_speed = 5, game = {}, shaped = false})
+assert(#TUNES == 2 and TUNES[2].value == nil, "the pop lifted before Back to the defaults was not let go at its launch (" .. #TUNES .. " tunes)")
+FLIP, STRENGTH = nil, nil
+report[#report + 1] = "Back to the defaults: the overlay is reset; Pop Butler keeps its switch, its ceiling, what it learnt and the table, and a lifted pop keeps its lift to the launch"
 
 -- 4. which pop a choice of the Studio is about (the relay numbers each choice: sel), "Stock" as a finding, and the
 -- pop grade from the launch's up-speed. Text faces, so the lines are d:text and can be read back.

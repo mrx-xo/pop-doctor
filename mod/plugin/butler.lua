@@ -16,6 +16,9 @@ local function settings() return env.settings() end
 -- trick alone. When the game names a listed trick while the skater is still on the ground, the value is set over the
 -- player's own (reskate.physics.tune) and let go at the launch, or after POP_HOLD_MS when no launch comes. The player's
 -- own value and the trainer's file are never written. Needs the skater.control permission.
+-- What is held (pop.held) is for one trick and one module, and is let go as soon as either is gone (pop_tick): the trick on
+-- the ground became another one or none (a kickflip that turns into an ollie must not keep the kickflip's height), Pop
+-- Butler was switched off, the table was emptied, a new settings table has its module off.
 local POP_ID = "PhysicsMode.JumpMinHeight"
 local POP_HOLD_MS = 700
 local pop = {held = nil, seen = nil, log = {}, sets = 0, late = 0}
@@ -23,13 +26,26 @@ local function pop_note(s)
     pop.log[#pop.log + 1] = {at = now(), note = s}
     if #pop.log > 30 then table.remove(pop.log, 1) end
 end
+-- Lets the held value go: true once the game has the player's own value back. pop.held is forgotten only then. A let go
+-- that fails keeps it (with .letting, why it was to go), and pop_tick tries again on every tick: until it is through
+-- nothing else is set, and the value in force is not read as the player's own (air_base).
 local function pop_release(why, up)
-    if not pop.held then return end
     local h = pop.held
-    pop.held = nil
+    if not h then return true end
     local ok, done, w = pcall(reskate.physics.tune, POP_ID, nil)
-    pop_note(string.format("%s let go after %.0f ms (%s)%s%s", h.trick, now() - h.since, why, up and string.format(", left at %.2f m/s up", up) or "",
-        (ok and done ~= false) and "" or (" LET GO FAILED: " .. tostring(ok and w or done))))
+    if ok and done ~= false then
+        pop.held = nil
+        up = up or h.up
+        pop_note(string.format("%s let go after %.0f ms (%s)%s%s", h.trick, now() - h.since, h.letting or why, up and string.format(", left at %.2f m/s up", up) or "",
+            h.tries and string.format(", at try %d", h.tries + 1) or ""))
+        return true
+    end
+    h.tries = (h.tries or 0) + 1
+    if not h.letting then
+        h.letting, h.up = why, up
+        pop_note(string.format("%s LET GO FAILED after %.0f ms (%s): %s. Tried again on every tick", h.trick, now() - h.since, why, tostring(ok and w or done)))
+    end
+    return false
 end
 -- The trick the game has in mind at the flick, for the pop's height: the value read above, and only the tricks a pop
 -- starts with, not what one becomes in the air.
@@ -90,10 +106,12 @@ local function air_ground() -- the height of the rider's frame (at the board, no
     if ok and type(fr) == "table" and fr.position then return fr.position.y end
     return nil
 end
-local function air_base() -- the player's own Ollie height (min): read while nothing of ours is set over it
+local function air_base() -- the player's own Ollie height (min): read while nothing of ours, or of another plugin, is set over it
     if not pop.held and now() - air.base_at > 1500 then
         local ok, v = pcall(reskate.physics.tuning, POP_ID)
-        if ok and type(v) == "table" and type(v.value) == "number" then air.base = v.value end
+        -- v.tuner: the plugin that holds a value over the player's own just now (the game names it). Then v.value is that plugin's.
+        local tuned = ok and type(v) == "table" and type(v.tuner) == "string" and v.tuner ~= ""
+        if ok and type(v) == "table" and type(v.value) == "number" and not tuned then air.base = v.value end
         air.base_at = now()
     end
     return air.base
@@ -134,6 +152,16 @@ end
 local function pop_tick()
     local cfg = air_cfg()
     local table_on = type(settings().trick_pop) == "table" and next(settings().trick_pop) ~= nil
+    -- What is held comes first, before the "both off" return below (that return used to skip every let go: a pop lifted
+    -- while a new settings table switched Pop Butler off stayed lifted). A let go that failed is tried again. A value whose own
+    -- module is off by now goes: Pop Butler's are the ones with .air, the table's act only while Pop Butler is off.
+    local h = pop.held
+    if h then
+        local off = h.air and not cfg.on and "Pop Butler switched off"
+            or (not h.air and (cfg.on and "Pop Butler switched on" or (not table_on and "the table of pop heights is empty")))
+        if h.letting or off then pop_release(h.letting or off) end
+        if pop.held and pop.held.letting then return end -- still not let go: nothing else until it is
+    end
     if not cfg.on and not table_on then return end
     local t = reskate.skater.telemetry()
     local state = t and t.physics_state or 0
@@ -157,7 +185,7 @@ local function pop_tick()
             local s = type(sv) == "table" and type(sv.value) == "number" and sv.value or nil
             if flip and not AIR_SKIP[flip] and s and s >= 0.97 then
                 pop.plan = {trick = flip, key = flip .. ":high", s = s, base = base, at = now(), y = air_ground()} -- nothing to aim: followed and learnt from
-                if pop.held and pop.held.air then pop_release("this pop goes high enough by itself") end
+                if pop.held then pop_release("this pop goes high enough by itself") end
             elseif flip and not AIR_SKIP[flip] and s and s >= 0 and base then
                 -- the game plays another clip for a mid and for a high pop (strength from a third and from two thirds, measured:
                 -- low at 0.301, mid at 0.363), each with a limit of its own: they are learnt apart, as "kickflip:mid"
@@ -168,21 +196,33 @@ local function pop_tick()
                 local want = nil
                 if natural < target - 0.004 or (cfg.cap and natural > target + 0.004) then want = air_height(cfg, target, s) end
                 if want then
-                    if not pop.held or math.abs(pop.held.value - want) > 0.004 then
+                    if not pop.held or pop.held.trick ~= flip or math.abs(pop.held.value - want) > 0.004 then
                         local ok, first = pop_set(flip, want, state, {target = target, s = s, air = true})
                         if ok and first then pop_note(string.format("%s, strength %.3f: would leave at %.2f, aimed at %.2f m/s: %s = %.2f", flip, s, natural, target, POP_ID, want)) end
                     end
-                elseif pop.held and pop.held.air then
+                elseif pop.held then
                     pop_release("this pop goes high enough by itself")
                 end
-            elseif flip and changed then
-                pop.plan = {trick = flip, s = s, base = base, at = now(), y = air_ground()}
+            else
+                -- An ollie, a nollie, a wallie (no flip to fit), no trick at all, or a flip whose strength is not read yet.
+                if flip and changed then pop.plan = {trick = flip, s = s, base = base, at = now(), y = air_ground()} end
+                -- What is held was set for another trick than this one: it goes now, not at the launch of a pop it was
+                -- not meant for. A tick the values could not be read on (why) says nothing about the trick, and the same
+                -- flip without its strength keeps what it has: both end at the launch or after POP_HOLD_MS.
+                if pop.held and pop.held.trick ~= flip and not why then
+                    pop_release(flip and ("the trick on the ground became " .. flip) or "the game dropped the trick")
+                end
             end
-        elseif changed then
+        else -- Pop Butler is off: the table
             local want = flip and settings().trick_pop[flip] or nil
-            if type(want) == "number" and want > 0 and not pop.held then
-                local ok = pop_set(flip, want, state, nil)
-                if ok then pop_note(string.format("%s named in state %.0f: %s = %.2f", flip, state, POP_ID, want)) end
+            if type(want) ~= "number" or want <= 0 then want = nil end
+            if changed and want then
+                if not pop.held or pop.held.trick ~= flip then -- another listed trick takes the value over: its own height, not the first one's
+                    local ok = pop_set(flip, want, state, nil)
+                    if ok then pop_note(string.format("%s named in state %.0f: %s = %.2f", flip, state, POP_ID, want)) end
+                end
+            elseif pop.held and pop.held.trick ~= flip and not why then
+                pop_release(flip and ("the trick on the ground became " .. flip) or "the game dropped the trick")
             end
         end
     end
