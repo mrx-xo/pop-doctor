@@ -63,7 +63,9 @@ local TITLE_PX = {22, 44, 44 * 30 / 17, 40}
 local TITLE_FONT = {"heading", "title", "title_large", "heading"}
 local TEXT_FONTS = {}   -- text/fonts.json: {{name, folder}, ...}; the "image" face's font choices
 local TEXT_IMAGES = {}  -- folder -> manifest (text -> {file, w, h, em}); loaded at start, empty without the pictures
--- The user's saved setup, shared by first load and the reset button (which keeps air and trick_pop: they are Pop Butler's).
+-- The user's saved setup, shared by first load and the reset button, which keeps DEFAULTS_KEEP: what is Pop Butler's
+-- (air, trick_pop) and what was learnt from the player's pops (the pop grade cutoffs).
+local DEFAULTS_KEEP = {"air", "trick_pop", "pop_cut_mid", "pop_cut_high", "pop_cut_mid_own", "pop_cut_high_own"}
 local function default_settings()
     return {
         corner = 1,            -- index into CORNERS
@@ -1119,12 +1121,16 @@ local function settings_tab(ui)
 
     ui:card("RESET")
     if ui:button("defaults", "Back to the defaults") then
-        -- The overlay's settings alone. Pop Butler's (settings.air: its switch, its options, every aim it has learnt) and
-        -- the table of pop heights (settings.trick_pop) are not this tab's and stay as they are. Before 2026-11-25 the
-        -- whole table was made new: Pop Butler off and all it had learnt gone. ("Forget what was learnt" is on its own tab.)
-        local air, trick_pop = settings.air, settings.trick_pop
+        -- How the overlay looks, and nothing that was learnt or belongs to another module. Kept as they are:
+        -- - Pop Butler's settings (settings.air: its switch, its options, every aim it has learnt) and the table of pop
+        --   heights (settings.trick_pop). Before 2026-11-25 the whole table was made new: Pop Butler off and all it had
+        --   learnt gone. ("Forget what was learnt" is on its own tab.)
+        -- - the pop grade cutoffs learnt from the game's own grades (pop_cut_*). They were put back to 3.135 / 3.52 and
+        --   the next graded pop brought the learnt ones back from the samples in memory (cal): a reset for one pop.
+        local kept = {}
+        for _, k in ipairs(DEFAULTS_KEEP) do kept[k] = settings[k] end
         settings = default_settings()
-        settings.air, settings.trick_pop = air, trick_pop
+        for _, k in ipairs(DEFAULTS_KEEP) do settings[k] = kept[k] end
     end
     if ui:button("clear", "Forget the last jumps") then hud.strip, hud.trick, hud.launch, hud.landing, hud.shown = {}, nil, nil, nil, nil end
     if reskate.json.encode(settings) .. tostring(hud.on) ~= before then save_settings() end

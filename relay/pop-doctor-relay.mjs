@@ -273,9 +273,13 @@ async function readPacks() {
   try { names = await fs.readdir(PRESETS); } catch { return; }
   const files = names.filter((n) => n.endsWith(".json"));
   const stamps = [];
-  for (const n of files) { try { stamps.push(n + ":" + (await fs.stat(path.join(PRESETS, n))).mtimeMs); } catch {} }
+  let newest = 0; // when a pack or the playlists file was last changed
+  for (const n of files) {
+    try { const at = (await fs.stat(path.join(PRESETS, n))).mtimeMs; stamps.push(n + ":" + at); if (at > newest) newest = at; } catch {}
+  }
   const stamp = stamps.join("|");
   if (gen !== generation || stamp === packStamp) return;
+  const first = packStamp === "";
   packStamp = stamp;
   const next = new Map();
   const tricks = new Map();
@@ -300,7 +304,11 @@ async function readPacks() {
   packOf = next;
   for (const [a, t] of tricks) if (!trickOfClip.has(a)) trickOfClip.set(a, t);
   state.packs = [...new Set(next.values())].filter((p) => p).sort((a, b) => a.localeCompare(b)); // every pack name, for the per-pack colour card
-  if (state.played) { state.pack = packOf.get(state.played) ?? null; }
+  // The choice on show keeps the pack it had when it was made: a playlist switched on afterwards used to move the
+  // jump already done into the new playlist's pack, on the overlay and in the plugin's history. Its pack is told
+  // again only when it could not be right at the time: the packs were not read yet (the relay had just started), or
+  // the choice came after the files changed and before this reading of them (they are read every PACKS_MS).
+  if (state.played && (first || state.sel >= newest - PACK_SLACK_MS)) state.pack = packOf.get(state.played) ?? null;
   dirty = true;
   console.log(`packs: ${files.length - 1} files, ${packOf.size} animations`);
   await readNames();
@@ -365,9 +373,20 @@ const RE_GRIND_LETS_GO = /^grinding; (.+?) lets go: (.+?)\.?$/;
 // One choice of the Studio and the lines that follow it are an episode: which clip, and when it started on the
 // log's clock. A clip's line belongs to the episode when the clip is the same and its own time puts its start
 // within SAME_MS of the episode's; otherwise the Studio chose again and that choice's own lines were swallowed.
+// SAME_MS alone merged two pops of one clip less than 0.9 s apart when the second's choice line was swallowed (pops
+// 0.85 s apart are in the logs of 2026-11-08), and it cannot simply be smaller: the lines of ONE pop tell starts up
+// to 0.9 s apart, since the clip's clock does not run with the wall clock. What tells the two apart is that clock:
+// through one choice a clip's own time only goes up, so a line whose time went back by more than BACK_S is the
+// clip started again, a new choice ("lets go at 0.80 s: the next pop", then "follows the game's clip at 0.13 s").
 const SAME_MS = 900;
 const PAIR_MS = 600; // "plays" and "the game does a" of one choice come together; a regrade in the air a moment later
-let episode = null; // {clip, start}
+const BACK_S = 0.1;
+const SWALLOW_MS = 5000; // the game's log swallows a line it wrote less than this long ago (logger.cpp)
+const EDGE_MS = 300;     // a choice told from the clip's other lines: how far its start may sit from its swallowed line's time
+const PACK_SLACK_MS = 2000; // readPacks: a choice this long before the packs changed still counts as made with the new ones
+let episode = null; // {clip, start, at (log ms of its own choice line; null without one), clock (the clip's own time in its last line, s), inferred (told without its own choice line)}
+const told = [];    // the last choices, oldest first (the episode objects): what a late "Repeated" line is matched against
+const doesAt = new Map(); // a choice line's whole text -> when the log last wrote it by itself (log ms)
 const lastDoes = new Map();   // clip -> {trick, grade, by}: what its last choice line said
 const lastStance = new Map(); // clip -> the stance text of its last "plays" line
 const lastGrind = new Map();  // grind clip -> the grind's name, from its last "starts" line
@@ -377,8 +396,10 @@ const saidBy = (r) => ({ trick: r[1], grade: GRADES.has(r[2]) ? r[2] : null, by:
 
 // The Studio chose CLIP at t (log ms). Until its own choice line says otherwise, the trick and grade are what that
 // clip's last choice line said (a swallowed line had the same text), else the trick the clip is filed under.
-function choose(clip, t, start) {
-  episode = { clip, start: start ?? t };
+function choose(clip, t, start, clock) {
+  episode = { clip, start: start ?? t, at: start === undefined ? t : null, clock: clock ?? 0, inferred: true };
+  told.push(episode);
+  if (told.length > 32) told.shift();
   state.sel = t;
   state.played = clip;
   state.pack = packOf.get(clip) ?? null;
@@ -395,6 +416,34 @@ function choose(clip, t, start) {
 function sameEpisode(clip, start, within) {
   return episode !== null && episode.clip === clip && Math.abs(start - episode.start) < within;
 }
+// A line with the clip's own time is a choice's when the clip is the same, the start it tells is close to the
+// choice's and the time has not gone back.
+function fits(c, clip, start, clock) {
+  return c.clip === clip && Math.abs(start - c.start) < SAME_MS && clock >= c.clock - BACK_S;
+}
+// The running choice's too: a line written within PAIR_MS of its own choice line, whatever time it tells. A clip that
+// starts on the game's clip of the pop before says "follows the game's mirrored clip 14 at 1.06 s" in the same
+// millisecond as its choice line, and "follows the game's mirrored clip (its own) at 0.17 s" a tenth of a second
+// later: neither is a start a second ago, and the second is not the clip started again. Both used to be told as
+// new choices, so one pop was three and ended as one "told without its own line".
+function sameChoice(clip, t, start, clock) {
+  if (episode === null || episode.clip !== clip) return false;
+  const withItsLine = episode.at !== null && t >= episode.at && t - episode.at < PAIR_MS;
+  if (!withItsLine && !fits(episode, clip, start, clock)) return false;
+  episode.clock = clock;
+  return true;
+}
+// A late line of a choice BEFORE the running one: the last line of a pop is often written a moment after the next
+// pop's choice line ("follows the game's mirrored clip 17 at 1.06 s", 1 ms after the next "the game does a"). It is
+// old news. It used to be told as a new choice, one without a line of its own, which then stood between a late
+// "Repeated" line and the choice that line was about.
+function earlierChoice(clip, start, clock) {
+  for (let i = told.length - 1; i >= 0; i--) {
+    const c = told[i];
+    if (c !== episode && fits(c, clip, start, clock)) { c.clock = clock; return true; }
+  }
+  return false;
+}
 
 function takeLine(line) {
   const m = STUDIO.exec(line);
@@ -405,12 +454,25 @@ function takeLine(line) {
   let r;
   if (repeated) {
     // Old news, never a new choice. Its one use: it confirms the trick and grade of a choice told from the clip alone.
+    // WHICH choice: "Repeated N more times" is written 5 s or more after the line was last written by itself, and its
+    // N pops all came in the 5 s after that writing. So it is about the choices of this clip told without their own
+    // line in that time, not about the newest one: one clip plays for more than one grade, and the "low" line of two
+    // pops ago used to regrade a high pop made since, and mark it sure (four pops of one clip inside 5 s). With more
+    // such choices than N (two lines swallowed side by side) the log does not say which is which: none is confirmed.
     if ((r = RE_DOES.exec(rest))) {
       const said = saidBy(r);
       if (!lastDoes.has(r[4])) lastDoes.set(r[4], said);
-      if (episode && episode.clip === r[4] && state.inferred && state.played === r[4]) {
-        state.trick = said.trick; state.grade = said.grade; state.graded_by = said.by; state.inferred = false;
-        dirty = true;
+      const n = Number(/Repeated (\d+) more times/.exec(m[2] || m[3])[1]);
+      const written = doesAt.get(rest); // not known when the relay started after it
+      const from = written === undefined ? -Infinity : written - EDGE_MS;
+      const to = written === undefined ? t : written + SWALLOW_MS + EDGE_MS;
+      const open = told.filter((c) => c.clip === r[4] && c.inferred && c.start >= from && c.start < to);
+      if (open.length > 0 && open.length <= n) {
+        for (const c of open) c.inferred = false;
+        if (open.includes(episode) && state.inferred && state.played === r[4]) {
+          state.trick = said.trick; state.grade = said.grade; state.graded_by = said.by; state.inferred = false;
+          dirty = true;
+        }
       }
     }
     else if ((r = RE_GRIND_STARTS.exec(rest)) && !lastGrind.has(r[2])) lastGrind.set(r[2], r[1]);
@@ -420,7 +482,9 @@ function takeLine(line) {
     const clip = r[4];
     const said = saidBy(r);
     lastDoes.set(clip, said);
+    doesAt.set(rest, t);
     if (!sameEpisode(clip, t, PAIR_MS)) choose(clip, t);
+    episode.inferred = false;
     state.trick = said.trick;
     state.grade = said.grade;
     state.graded_by = said.by;
@@ -431,13 +495,18 @@ function takeLine(line) {
     if (!sameEpisode(clip, t, PAIR_MS)) choose(clip, t);
     state.stance = lastStance.get(clip);
   } else if ((r = RE_LETS_GO.exec(rest))) {
-    const start = t - Number(r[2]) * 1000;
-    if (!sameEpisode(r[1], start, SAME_MS)) choose(r[1], t, start);
+    const clock = Number(r[2]);
+    const start = t - clock * 1000;
+    if (!sameChoice(r[1], t, start, clock)) {
+      if (earlierChoice(r[1], start, clock)) return;
+      choose(r[1], t, start, clock);
+    }
     state.lets_go = `at ${r[2]} s: ${r[3]}`;
   } else if ((r = RE_CLOCK.exec(rest))) {
-    const start = t - Number(r[2]) * 1000;
-    if (sameEpisode(r[1], start, SAME_MS)) return; // a clock line of a choice already told: nothing new
-    choose(r[1], t, start);
+    const clock = Number(r[2]);
+    const start = t - clock * 1000;
+    if (sameChoice(r[1], t, start, clock) || earlierChoice(r[1], start, clock)) return; // a line of a choice already told: nothing new
+    choose(r[1], t, start, clock);
   } else if ((r = RE_NATIVE.exec(rest))) {
     episode = null;
     state.sel = t;
@@ -580,8 +649,8 @@ function useGame(dir) {
   Object.assign(state, JSON.parse(fresh), { trainer });
   targets = []; targetsKey = null;
   packOf = new Map(); packStamp = ""; namesStamp = -1;
-  trickOfClip.clear(); lastDoes.clear(); lastStance.clear(); lastGrind.clear();
-  episode = null;
+  trickOfClip.clear(); lastDoes.clear(); lastStance.clear(); lastGrind.clear(); doesAt.clear();
+  episode = null; told.length = 0;
   offset = 0; carry = ""; logFile = null;
   // another game may keep its trainer in another prefix: look again, and say nothing of the last one's meanwhile
   if (!WIN) { TRAINER = null; trainerLooked = 0; trainerText = null; state.trainer = null; }

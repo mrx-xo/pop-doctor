@@ -423,6 +423,27 @@ assert(#TUNES == 2 and TUNES[2].value == nil, "the pop lifted before Back to the
 FLIP, STRENGTH = nil, nil
 report[#report + 1] = "Back to the defaults: the overlay is reset; Pop Butler keeps its switch, its ceiling, what it learnt and the table, and a lifted pop keeps its lift to the launch"
 
+-- 3f. "Back to the defaults" keeps the pop grade cutoffs learnt from the player's pops. Before 2026-11-25 it put them
+-- back to 3.135 / 3.52 and the next graded pop restored the learnt ones from the samples in memory.
+reset()
+files["settings.json"] = encode({on = true, corner = 4, scale = 1.5, pop_cut_mid = 2.9, pop_cut_high = 3.3, pop_cut_mid_own = true, pop_cut_high_own = true})
+PLUGIN()
+do
+    local o = EXPOSED.overlay(nil)
+    assert(o.corner == "top-right" and o.pop_cuts.mid == 2.9 and o.pop_cuts.high == 3.3, "the saved corner and cutoffs were not loaded")
+    PRESS = "defaults"
+    pages[1].build(make_ui(2))
+    PRESS = nil
+    o = EXPOSED.overlay(nil)
+    assert(o.corner == "bottom-left", "Back to the defaults did not put the overlay's corner back: " .. tostring(o.corner))
+    assert(o.pop_cuts.mid == 2.9 and o.pop_cuts.high == 3.3, string.format("Back to the defaults changed the learnt pop grade cutoffs: %s / %s", tostring(o.pop_cuts.mid), tostring(o.pop_cuts.high)))
+    local saved = decode(files["settings.json"])
+    assert(saved.scale == 1 and saved.corner == 1, "Back to the defaults: the saved overlay settings are not the defaults")
+    assert(saved.pop_cut_mid == 2.9 and saved.pop_cut_high == 3.3 and saved.pop_cut_mid_own == true and saved.pop_cut_high_own == true,
+        "Back to the defaults: the saved settings lost the learnt pop grade cutoffs")
+end
+report[#report + 1] = "Back to the defaults keeps the learnt pop grade cutoffs (2.90 / 3.30) and resets the corner and the size"
+
 -- 4. which pop a choice of the Studio is about (the relay numbers each choice: sel), "Stock" as a finding, and the
 -- pop grade from the launch's up-speed. Text faces, so the lines are d:text and can be read back.
 reset()
