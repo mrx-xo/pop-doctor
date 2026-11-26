@@ -395,11 +395,59 @@ reskate.on("tick", function()
     pcall(butler.pop_tick)
     pcall(butler.tick)
 end)
--- For tools: reskate.require_plugin("Pop_Doctor") in another plugin gives these two. StudioBridge's ops "air" and
--- "trick_pop" hand their argument on, so its test rounds set and read Pop Butler as they did when it lived there.
+-- For tools: reskate.require_plugin("Pop_Doctor") in another plugin gives these three. StudioBridge's ops "overlay",
+-- "air" and "trick_pop" hand their argument on, so its test rounds set and read them as they did when they lived there.
+--   overlay [{on, corner, layout, title_face, grade_style, pack_style, scale, backing, clear}]: the block's settings by
+--     name or number; clear forgets the last jumps. Gives back the settings and the last jumps as the overlay saw them.
 --   butler [{"on": true, "cap": false, "reset": "kickflip" | "all", "set": {"kickflip": {"aim": 2.9}}, "ceiling"|"start"|"step"|...: n}]
 --   trick_pop [{"set": {"360flip": 2.7}}]: the per-trick pop heights (they act only while Pop Butler is off)
 reskate.expose({
+    overlay = function(a)
+        if type(a) ~= "table" then a = {} end
+        if a.on ~= nil then hud.on = a.on and true or false end
+        if a.backing ~= nil then settings.backing = a.backing and true or false end
+        if a.corner ~= nil then
+            local n = tonumber(a.corner)
+            if not n then for i, c in ipairs(CORNERS) do if c == a.corner then n = i end end end
+            if not n or n < 1 or n > #CORNERS then error("corner is one of " .. table.concat(CORNERS, ", ")) end
+            settings.corner = n
+        end
+        if a.layout ~= nil then
+            local n = tonumber(a.layout)
+            if not n then for i, l in ipairs(LAYOUTS) do if l == a.layout then n = i end end end
+            if not n or n < 1 or n > #LAYOUTS then error("layout is one of " .. table.concat(LAYOUTS, ", ")) end
+            settings.layout = n
+        end
+        -- the other choice settings, by name or number: title_face, grade_style, pack_style
+        for key, names in pairs({title_face = TITLE_FACES, grade_style = GRADE_STYLES, pack_style = PACK_STYLES}) do
+            if a[key] ~= nil then
+                local n = tonumber(a[key])
+                if not n then for i, v in ipairs(names) do if v == a[key] then n = i end end end
+                if not n or n < 1 or n > #names then error(key .. " is one of " .. table.concat(names, ", ")) end
+                settings[key] = n
+            end
+        end
+        if a.scale ~= nil then settings.scale = math.clamp(tonumber(a.scale) or 1, 0.5, 2) end
+        if a.clear then hud.strip, hud.trick, hud.launch, hud.landing, hud.bail, hud.shown = {}, nil, nil, nil, nil, nil end
+        save_settings()
+        -- recent: the history's jumps (STRIP_MAX, newest last) as the overlay saw them, for checking the match between the
+        -- game's id and the Studio's: flick / flips are the game's flip value at the launch and through the air, turned
+        -- is the board ending end for end, overs how often it came back onto its wheels, variant the hospital flip or the
+        -- underflip those make, named the trick a pop is titled by
+        local recent = {}
+        for _, e in ipairs(hud.strip) do
+            recent[#recent + 1] = {name = e.name, clip = e.clip, grade = e.grade, grade_est = e.grade_est, air = e.air,
+                flick = e.flick, named = e.named, variant = e.variant, flips = e.flips, turned = e.turned, overs = e.overs, over_ms = e.over_ms, at = e.at, launch_at = e.launch_at}
+        end
+        local s = hud.studio
+        return {on = hud.on, corner = CORNERS[settings.corner], backing = settings.backing, strip = #hud.strip, studio = s ~= nil,
+                recent = recent, trick = hud.trick and hud.trick.name, studio_trick = s and s.trick, studio_played = s and s.played,
+                fresh = studio_fresh(), launch_at = hud.launch and hud.launch.at, studio_seen_at = s and s.seen_at,
+                sel = hud.sel, sel_at = hud.sel_at, shown = scalars(hud.shown), resolved = hud.launch and hud.launch.resolved,
+                pop_cuts = {mid = settings.pop_cut_mid, high = settings.pop_cut_high, samples = {low = #cal.low, mid = #cal.mid, high = #cal.high}},
+                layout = LAYOUTS[settings.layout], grade_style = GRADE_STYLES[settings.grade_style],
+                colours = {low = settings.colour_low, mid = settings.colour_mid, high = settings.colour_high, grind = settings.colour_grind}}
+    end,
     butler = function(a)
         if type(a) ~= "table" then a = {} end
         local pop, air = butler.pop, butler.air

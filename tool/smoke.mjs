@@ -381,6 +381,9 @@ do -- what a tool reaches through reskate.require_plugin("Pop_Doctor"): read, sw
     assert(was.on == true and was.ceiling == 2.95 and type(was.log) == "table", "exposed butler({}) did not give Pop Butler's state")
     assert(EXPOSED.butler({on = false, ceiling = 3.1}).on == false and EXPOSED.butler(nil).ceiling == 3.1, "exposed butler did not take a setting")
     assert(next(EXPOSED.trick_pop({set = {kickflip = 2.4}}).table) == "kickflip", "exposed trick_pop did not take its table")
+    local o = EXPOSED.overlay({corner = "top-right", scale = 1.5})
+    assert(o.corner == "top-right" and o.on == true and type(o.recent) == "table" and o.pop_cuts.mid > 0, "exposed overlay did not take a corner or give its state")
+    assert(pcall(EXPOSED.overlay, {corner = "middle"}) == false, "exposed overlay took a corner that does not exist")
 end
 report[#report + 1] = string.format("Pop Butler: off, nothing is tuned; on, a weak kickflip gets Ollie height (min) %.2f for that pop (the player's 1.50) and it is let go at the launch", TUNES[1].value)
 
