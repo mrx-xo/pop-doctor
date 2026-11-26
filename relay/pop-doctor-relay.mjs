@@ -308,7 +308,10 @@ async function readPacks() {
   // jump already done into the new playlist's pack, on the overlay and in the plugin's history. Its pack is told
   // again only when it could not be right at the time: the packs were not read yet (the relay had just started), or
   // the choice came after the files changed and before this reading of them (they are read every PACKS_MS).
-  if (state.played && (first || state.sel >= newest - PACK_SLACK_MS)) state.pack = packOf.get(state.played) ?? null;
+  // "After" with no allowance: the Studio writes playlists.json in the call that switches the playlist
+  // (play_playlist_locked), so a choice logged before the file's time was made under the playlist before. An
+  // allowance of 2 s stood here for one evening and moved a jump made 0.8 s before a switch.
+  if (state.played && (first || state.sel >= Math.floor(newest))) state.pack = packOf.get(state.played) ?? null;
   dirty = true;
   console.log(`packs: ${files.length - 1} files, ${packOf.size} animations`);
   await readNames();
@@ -383,10 +386,21 @@ const PAIR_MS = 600; // "plays" and "the game does a" of one choice come togethe
 const BACK_S = 0.1;
 const SWALLOW_MS = 5000; // the game's log swallows a line it wrote less than this long ago (logger.cpp)
 const EDGE_MS = 300;     // a choice told from the clip's other lines: how far its start may sit from its swallowed line's time
-const PACK_SLACK_MS = 2000; // readPacks: a choice this long before the packs changed still counts as made with the new ones
 let episode = null; // {clip, start, at (log ms of its own choice line; null without one), clock (the clip's own time in its last line, s), inferred (told without its own choice line)}
 const told = [];    // the last choices, oldest first (the episode objects): what a late "Repeated" line is matched against
 const doesAt = new Map(); // a choice line's whole text -> when the log last wrote it by itself (log ms)
+const wrote = [];         // the choice lines the log wrote by themselves, oldest first: {clip, text, at}
+// Was `text` the only choice line of its clip written in the 5 s before the choice c? Then the line c had swallowed
+// was that one: the log swallows a line only when the same text was written less than 5 s before.
+function onlyLine(c, text) {
+  let any = false;
+  for (const w of wrote) {
+    if (w.clip !== c.clip || w.at <= c.start - SWALLOW_MS - EDGE_MS || w.at >= c.start + EDGE_MS) continue;
+    if (w.text !== text) return false;
+    any = true;
+  }
+  return any;
+}
 const lastDoes = new Map();   // clip -> {trick, grade, by}: what its last choice line said
 const lastStance = new Map(); // clip -> the stance text of its last "plays" line
 const lastGrind = new Map();  // grind clip -> the grind's name, from its last "starts" line
@@ -457,20 +471,29 @@ function takeLine(line) {
     // WHICH choice: "Repeated N more times" is written 5 s or more after the line was last written by itself, and its
     // N pops all came in the 5 s after that writing. So it is about the choices of this clip told without their own
     // line in that time, not about the newest one: one clip plays for more than one grade, and the "low" line of two
-    // pops ago used to regrade a high pop made since, and mark it sure (four pops of one clip inside 5 s). With more
-    // such choices than N (two lines swallowed side by side) the log does not say which is which: none is confirmed.
+    // pops ago used to regrade a high pop made since, and mark it sure (four pops of one clip inside 5 s).
+    // - SURE of a choice only when this was the one choice line of its clip written in the 5 s before it (onlyLine):
+    //   no other line can be the one it had swallowed. Counting is not proof. "One swallowed, one choice without its
+    //   line in that time, so it is that one" fails when a pop left no line at all in the log (every line of it
+    //   swallowed, or the relay not reading then): the count is then about a pop that is not in `told`.
+    // - Where another choice line was written in that time too, the count only makes the better guess: as many such
+    //   choices as the count, or fewer, take this line's grade and stay "told without their own line". More of them
+    //   than the count (two lines swallowed side by side): the log does not say which is which, nothing changes.
+    // - A repeat of a line the relay never saw written (it started later) says nothing about when: left alone.
     if ((r = RE_DOES.exec(rest))) {
       const said = saidBy(r);
       if (!lastDoes.has(r[4])) lastDoes.set(r[4], said);
       const n = Number(/Repeated (\d+) more times/.exec(m[2] || m[3])[1]);
-      const written = doesAt.get(rest); // not known when the relay started after it
-      const from = written === undefined ? -Infinity : written - EDGE_MS;
-      const to = written === undefined ? t : written + SWALLOW_MS + EDGE_MS;
-      const open = told.filter((c) => c.clip === r[4] && c.inferred && c.start >= from && c.start < to);
-      if (open.length > 0 && open.length <= n) {
-        for (const c of open) c.inferred = false;
-        if (open.includes(episode) && state.inferred && state.played === r[4]) {
-          state.trick = said.trick; state.grade = said.grade; state.graded_by = said.by; state.inferred = false;
+      const written = doesAt.get(rest);
+      if (written !== undefined) {
+        const open = told.filter((c) => c.clip === r[4] && c.inferred && c.start >= written - EDGE_MS && c.start < written + SWALLOW_MS + EDGE_MS);
+        const sure = open.filter((c) => onlyLine(c, rest));
+        const unsure = open.filter((c) => !sure.includes(c));
+        const guessed = unsure.length <= n - sure.length ? unsure : [];
+        for (const c of sure) c.inferred = false;
+        if (episode !== null && state.inferred && state.played === r[4] && (sure.includes(episode) || guessed.includes(episode))) {
+          state.trick = said.trick; state.grade = said.grade; state.graded_by = said.by;
+          if (sure.includes(episode)) state.inferred = false;
           dirty = true;
         }
       }
@@ -483,6 +506,8 @@ function takeLine(line) {
     const said = saidBy(r);
     lastDoes.set(clip, said);
     doesAt.set(rest, t);
+    wrote.push({ clip, text: rest, at: t });
+    if (wrote.length > 64) wrote.shift();
     if (!sameEpisode(clip, t, PAIR_MS)) choose(clip, t);
     episode.inferred = false;
     state.trick = said.trick;
@@ -650,7 +675,7 @@ function useGame(dir) {
   targets = []; targetsKey = null;
   packOf = new Map(); packStamp = ""; namesStamp = -1;
   trickOfClip.clear(); lastDoes.clear(); lastStance.clear(); lastGrind.clear(); doesAt.clear();
-  episode = null; told.length = 0;
+  episode = null; told.length = 0; wrote.length = 0;
   offset = 0; carry = ""; logFile = null;
   // another game may keep its trainer in another prefix: look again, and say nothing of the last one's meanwhile
   if (!WIN) { TRAINER = null; trainerLooked = 0; trainerText = null; state.trainer = null; }

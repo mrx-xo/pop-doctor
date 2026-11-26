@@ -8,11 +8,14 @@
 // wrote less than 5 s ago and writes "Repeated N more times: <line>" later (Engine/Core/Log/logger.cpp); the copy of
 // that rule below makes the stand-in logs, so a pop's lines are swallowed here exactly when the game would.
 //   1a. four pops of one clip inside 5 s, low high low high: the late "Repeated ... low" line is not about the last one
-//   1b. the same clip, the repeat written before the next pop: it still corrects the pop it is about (as on 2026-11-08)
+//   1b. the same clip, the repeat written before the next pop: it still corrects the pop it is about (as on 2026-11-08),
+//       as the better guess and not as sure, since two different choice lines were written in the 5 s before it
 //   1c. two pops of one clip 0.8 s apart, the second with no choice line: two choices, not one
 //   1d. a clip that starts on the game's clip of the pop before ("at 1.06 s", then "(its own) at 0.17 s"): one choice
-// Part 2 runs the relay beside a stand-in game folder (about 15 s): a playlist switched on after a jump does not move
-// that jump to the new playlist's pack; the next jump has the new pack.
+//   1e. one grade only in the last 5 s: the repeat makes the choice sure
+//   1f. a pop that left no line at all in the log: the repeat that counts it does not make another pop sure
+// Part 2 runs the relay beside a stand-in game folder (about 15 s): a playlist switched on after a jump, even 0.8 s
+// after it, does not move that jump to the new playlist's pack; the next jump has the new pack.
 // Nothing outside a temp folder is read or written: the relay is told the stand-in folder and its own files go there.
 
 import fs from "node:fs";
@@ -60,9 +63,15 @@ function gameLog(base) {
   let deg = 2.0;
   // One pop at t (ms): the Studio's lines as in the logs of 2026-11-07 and 11-08. ends: ms after t its "lets go" line
   // comes, and why. carried: the clip starts on the game's clip of the pop before.
-  const pop = (t, clip, trick, grade, ends, why, carried) => {
+  const choiceLines = (t, clip, trick, grade) => {
     log(t, `Animation Studio: ${clip} (made leading with the left foot) plays - left foot leading - as made (front foot).`);
     log(t, `Animation Studio: the game does a ${trick} (${grade} pop by the game's grade, at the flick, before the pop), playing your ${clip} as made for the ${grade} pop (authored edits over fresh native pose).`);
+  };
+  // A pop that leaves no line of its own: its choice lines are swallowed (the same texts less than 5 s before) and so,
+  // here, is every other line of it. The log only counts it, in a "Repeated" line later.
+  const unseen = (t, clip, trick, grade) => choiceLines(t, clip, trick, grade);
+  const pop = (t, clip, trick, grade, ends, why, carried) => {
+    choiceLines(t, clip, trick, grade);
     deg += 0.1;
     if (carried) {
       log(t, `Animation Studio: ${clip} follows the game's mirrored clip 14 at 1.06 s (${deg.toFixed(1)} degrees).`);
@@ -70,7 +79,7 @@ function gameLog(base) {
     } else log(t + 130, `Animation Studio: ${clip} follows the game's clip (its own) at 0.13 s (${deg.toFixed(1)} degrees).`);
     if (ends) log(t + ends, `Animation Studio: ${clip} lets go at ${(ends / 1000).toFixed(2)} s: ${why ?? "the game's next animation"}.`);
   };
-  return { pop, text: () => out.join("\n") + "\n" };
+  return { pop, unseen, text: () => out.join("\n") + "\n" };
 }
 // What the relay tells of a log: [{trick, grade, clip, own (told with its own choice line)}]
 function replay(name, text) {
@@ -108,7 +117,9 @@ const BASE = Date.parse("2026-11-25T12:00:00.000");
   check(told[2] && told[2].own === false, "1a: the third pop is not told as sure either: the log cannot say which is which", show(told));
   report.push("four pops of one clip in 5 s, two grades: the late low line no longer regrades the high pop made since");
 }
-// 1b. The repeat written before the next pop is told: it corrects the pop it is about, and the next repeat the next.
+// 1b. The repeat written before the next pop is told: it corrects the pop it is about (the pattern of 2026-11-08,
+// 22:18:43). A low and a high line were both written in the 5 s before that pop, so the count ("one swallowed, one
+// choice without its line") makes the better guess and no more: low, and not sure.
 {
   const g = gameLog(BASE);
   g.pop(0, X, "fspopshuvit", "low", 1400, "the next pop");
@@ -118,9 +129,9 @@ const BASE = Date.parse("2026-11-25T12:00:00.000");
   g.pop(14000, Y, "kickflip", "low", 1300);
   const told = replay("1b", g.text());
   check(told.length === 5, "1b: five pops are five choices", show(told));
-  check(told[2] && told[2].grade === "low" && told[2].own, "1b: the third pop is corrected to low by its repeat, and sure", show(told));
-  check(told[3] && told[3].grade === "high" && told[3].own, "1b: the fourth pop is confirmed high by its own repeat", show(told));
-  report.push("a repeat written before the next pop still corrects the pop it is about (high to low), and the next one confirms the next");
+  check(told[2] && told[2].grade === "low" && told[2].own === false, "1b: the third pop is corrected to low by its repeat, as a guess", show(told));
+  check(told[3] && told[3].grade === "high" && told[3].own === false, "1b: the fourth pop stays high, as a guess", show(told));
+  report.push("a repeat written before the next pop still corrects the pop it is about (high to low), as the better guess, not as sure");
 }
 // 1c. Two low pops of X 0.8 s apart; the second's lines are swallowed but for its clock line. Before: one choice. The
 // first's "lets go at 0.80 s: the next pop" and then "follows ... at 0.13 s": the clip's own time went back.
@@ -144,6 +155,37 @@ report.push("two pops of one clip 0.8 s apart, the second without its own line: 
   check(told.length === 3, "1d: a clip that starts on the game's clip of the pop before is one choice", show(told));
   check(told[1] && told[1].clip === X && told[1].own, "1d: and it keeps its own choice line", show(told));
   report.push("a clip that starts on the game's clip of the pop before: one choice, sure (it was three, the last not sure)");
+}
+// 1e. One grade only in the 5 s before: the swallowed line can only have been that one, and its repeat makes the
+// choice sure. (The clip's high line of 20 s before is too old to be the swallowed one.)
+{
+  const g = gameLog(BASE);
+  g.pop(0, X, "fspopshuvit", "high", 1300);
+  g.pop(20000, X, "fspopshuvit", "low", 1300);
+  g.pop(22000, X, "fspopshuvit", "low", 1300);         // no line of its own
+  g.pop(30000, Y, "kickflip", "low", 1300);
+  const told = replay("1e", g.text());
+  check(told.length === 4 && told[2].clip === X && told[2].grade === "low" && told[2].own, "1e: one grade in the last 5 s: the repeat makes the choice sure", show(told));
+  report.push("one grade only in the last 5 s: the repeat makes the choice sure");
+}
+// 1f. A pop that left no line at all (the review of 2026-11-25, the second one). Low at 0 s, a low pop at 1.5 s the
+// log only counts, high at 2.5 s, a high pop at 4 s with no choice line. "Repeated 1 more times: ... low" is about the
+// pop that is not there, and the one choice without its line in that time is the high pop. Counting made it low and
+// sure. A low and a high line were both written in the 5 s before it: it is never sure, and the high line's own
+// repeat, which comes after, leaves it high.
+{
+  const g = gameLog(BASE);
+  g.pop(0, X, "fspopshuvit", "low", 1300);
+  g.unseen(1500, X, "fspopshuvit", "low");
+  g.pop(2500, X, "fspopshuvit", "high", 1300);
+  g.pop(4000, X, "fspopshuvit", "high", 1450);         // its "lets go" at 5.45 s writes "Repeated 1 more times: ... low"
+  g.pop(12000, Y, "kickflip", "low", 1300);
+  const told = replay("1f", g.text());
+  const last = told[2] ?? {};
+  check(told.length === 4 && last.clip === X, "1f: three pops with lines and one without are four choices here", show(told));
+  check(last.own === false, "1f: a repeat that counts a pop with no line in the log does not make another pop sure", show(told));
+  check(last.grade === "high", "1f: and that pop ends with its own grade, high", show(told));
+  report.push("a pop with no line in the log: the repeat that counts it does not make the pop after it sure (it was told low, and sure)");
 }
 
 // ---- 2. beside a stand-in game: the pack of a jump already done ---------------------------------
@@ -182,12 +224,12 @@ try {
     popNow();
     await until("a jump under playlist One is in Pack A", 5000, () => studio().played === Y && studio().pack === "Pack A");
     const sel = studio().sel;
-    await sleep(3000);
+    await sleep(800); // a playlist switched on 0.8 s after the jump: an allowance of 2 s moved that jump
     let reads = packReads();
     playlists("Two");
     if (await until("the relay reads the packs again after the playlist is switched", 12000, () => packReads() > reads)) {
       await sleep(800);
-      check(studio().pack === "Pack A" && studio().sel === sel, "2: a playlist switched on after the jump leaves that jump in its pack (it was moved to Pack B)", JSON.stringify({ pack: studio().pack, sel: studio().sel, was: sel }));
+      check(studio().pack === "Pack A" && studio().sel === sel, "2: a playlist switched on 0.8 s after the jump leaves that jump in its pack (it was moved to Pack B)", JSON.stringify({ pack: studio().pack, sel: studio().sel, was: sel }));
       popNow();
       await until("the next jump is in the new playlist's pack, Pack B", 5000, () => studio().sel !== sel && studio().pack === "Pack B");
       // a jump made right after a switch, before the relay has read the packs again: its pack is put right at that reading
@@ -198,7 +240,7 @@ try {
       if (await until("the relay reads the packs again after the second switch", 12000, () => packReads() > reads)) {
         await until("a jump made just after a switch gets the new playlist's pack once the packs are read", 3000, () => studio().pack === "Pack A");
       }
-      report.push("a playlist switched on after a jump: that jump keeps its pack; the next jump, and one made right after the switch, get the new one");
+      report.push("a playlist switched on 0.8 s after a jump: that jump keeps its pack; the next jump, and one made right after the switch, get the new one");
     }
   }
 } finally {
